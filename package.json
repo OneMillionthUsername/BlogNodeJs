@@ -12,6 +12,6 @@
     "express": "^4.18.2"
   },
   "keywords": ["blog", "express", "nodejs"],
-  "author": "",
+  "author": "Dean Marinov",
   "license": "ISC"
 }

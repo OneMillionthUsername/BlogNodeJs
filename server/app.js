@@ -40,7 +40,18 @@ app.post('/blogpost', (req, res) => {
     date: new Date().toISOString()
   };
 
-  const fileName = `${blogPost.date.split('T')[0]}-${title.toLowerCase().replace(/\s+/g, '-')}.json`;
+  // Funktion zur Bereinigung von Dateinamen
+  function sanitizeFileName(fileName) {
+    return fileName
+      .toLowerCase()
+      .replace(/[^\w\s-äöüß]/g, '') // Entferne alle ungültigen Zeichen, behalte nur Buchstaben, Zahlen, Leerzeichen, Bindestriche und Umlaute
+      .replace(/\s+/g, '-') // Ersetze Leerzeichen durch Bindestriche
+      .replace(/-+/g, '-') // Ersetze mehrere aufeinanderfolgende Bindestriche durch einen
+      .replace(/^-+|-+$/g, ''); // Entferne Bindestriche am Anfang und Ende
+  }
+
+  const sanitizedTitle = sanitizeFileName(title);
+  const fileName = `${blogPost.date.split('T')[0]}-${sanitizedTitle}.json`;
   const filePath = join(__dirname, '..', 'posts', fileName);
 
   // Ordner anlegen, falls nicht vorhanden
