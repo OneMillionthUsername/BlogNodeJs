@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <title>Archiv - Sub specie aeternitatis</title>
+</head>
+<body>
+    <div class="container-fluid header-section">
+        <h1 class="main-title">Archiv</h1>
+        <p class="description">Ältere Beiträge - Gedanken aus der Vergangenheit</p>
+        <hr class="header-divider">
+    </div>
+    
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="content-area">
+                    <div id="archivePosts">
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                            <p>Lade Archiv...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="navigation text-center mt-4">
+            <a href="../index.html" class="btn btn-outline-primary">🏠 Zur Startseite</a>
+            <a href="list_posts.html" class="btn btn-outline-secondary ml-2">📚 Aktuelle Posts</a>
+        </div>
+    </div>
+
+    <script>
+        async function loadArchivePosts() {
+            try {
+                const response = await fetch('/blogposts');
+                const posts = await response.json();
+                
+                const listContainer = document.getElementById('archivePosts');
+                
+                // Filtere Posts älter als 3 Monate
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                
+                const archivePosts = posts.filter(post => {
+                    const postDate = new Date(post.date);
+                    return postDate < threeMonthsAgo;
+                });
+                
+                if (archivePosts.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="no-posts">
+                            <div class="no-posts-icon">📚</div>
+                            <h3>Kein Archiv vorhanden</h3>
+                            <p>Es sind noch keine Blogposts älter als 3 Monate vorhanden.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `<div class="archive-posts-list">`;
+                archivePosts.forEach(post => {
+                    const postDate = new Date(post.date).toLocaleDateString('de-DE');
+                    html += `
+                        <div class="archive-post-item">
+                            <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
+                            <p class="post-meta">📅 ${postDate}</p>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                listContainer.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Fehler beim Laden des Archivs:', error);
+                document.getElementById('archivePosts').innerHTML = '<p>Fehler beim Laden des Archivs.</p>';
+            }
+        }
+
+        window.addEventListener('load', loadArchivePosts);
+    </script>
+</body>
+</html>
