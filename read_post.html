@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blogpost</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="blogpost-content">
+            <p id="loading">Lade Blogpost...</p>
+            <h1 id="title" style="display: none;"></h1>
+            <div id="meta" style="display: none;"></div>
+            <div id="content" style="display: none;"></div>
+            <div id="tags" style="display: none;"></div>
+        </div>
+        
+        <div class="navigation">
+            <a href="list_posts.html">Alle Blogposts</a>
+            <a href="index.html">Zur Startseite</a>
+        </div>
+    </div>
+
+    <script>
+        async function loadBlogPost() {
+            // URL-Parameter auslesen
+            const urlParams = new URLSearchParams(window.location.search);
+            const filename = urlParams.get('post');
+            
+            if (!filename) {
+                document.getElementById('loading').textContent = 'Kein Blogpost ausgewählt.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/blogpost/${filename}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const post = await response.json();
+                
+                // Titel setzen
+                document.getElementById('title').textContent = post.title;
+                document.title = post.title;
+                
+                // Datum und Meta-Informationen
+                const postDate = new Date(post.date).toLocaleDateString('de-DE');
+                document.getElementById('meta').innerHTML = `<p class="post-meta">Veröffentlicht am: ${postDate}</p>`;
+                
+                // Inhalt setzen
+                document.getElementById('content').innerHTML = `<div class="post-content">${post.content.replace(/\n/g, '<br>')}</div>`;
+                
+                // Tags anzeigen
+                if (post.tags && post.tags.length > 0) {
+                    document.getElementById('tags').innerHTML = `<p class="post-tags">Tags: ${post.tags.join(', ')}</p>`;
+                    document.getElementById('tags').style.display = 'block';
+                }
+                
+                // Elemente anzeigen
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('title').style.display = 'block';
+                document.getElementById('meta').style.display = 'block';
+                document.getElementById('content').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Fehler beim Laden des Blogposts:', error);
+                document.getElementById('loading').textContent = 'Fehler beim Laden des Blogposts.';
+            }
+        }
+
+        // Blogpost laden wenn die Seite geladen wird
+        window.addEventListener('load', loadBlogPost);
+    </script>
+</body>
+</html>

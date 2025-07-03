@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alle Blogposts</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Alle Blogposts</h1>
+        
+        <div id="blogPostsList">
+            <p>Lade Blogposts...</p>
+        </div>
+
+        <div class="navigation">
+            <a href="index.html">Zurück zur Startseite</a>
+            <a href="create.html">Neuen Blogpost erstellen</a>
+        </div>
+    </div>
+
+    <script>
+        async function loadBlogPosts() {
+            try {
+                const response = await fetch('/blogposts');
+                const posts = await response.json();
+                
+                const listContainer = document.getElementById('blogPostsList');
+                
+                if (posts.length === 0) {
+                    listContainer.innerHTML = '<p>Noch keine Blogposts vorhanden.</p>';
+                    return;
+                }
+
+                let html = '<div class="blog-posts-list">';
+                posts.forEach(post => {
+                    const postDate = new Date(post.date).toLocaleDateString('de-DE');
+                    html += `
+                        <div class="blog-post-item">
+                            <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
+                            <p class="post-meta">
+                                <span class="date">${postDate}</span>
+                                ${post.tags.length > 0 ? `<span class="tags">Tags: ${post.tags.join(', ')}</span>` : ''}
+                            </p>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                listContainer.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Fehler beim Laden der Blogposts:', error);
+                document.getElementById('blogPostsList').innerHTML = '<p>Fehler beim Laden der Blogposts.</p>';
+            }
+        }
+
+        // Blogposts laden wenn die Seite geladen wird
+        window.addEventListener('load', loadBlogPosts);
+    </script>
+</body>
+</html>

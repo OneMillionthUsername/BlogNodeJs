@@ -1,5 +1,5 @@
 import express, { json } from 'express';
-import { mkdir, writeFile, readFile } from 'fs';
+import { mkdir, writeFile, readFile, readdir } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -8,6 +8,7 @@ const __dirname = dirname(__filename);
 const publicDirectoryPath = __dirname;
 const app = express();
 
+console.log(`Serververzeichnis: ${__dirname}`);
 // Middleware für Content Security Policy und JSON-Body-Parsing
 // app.use((req, res, next) => {
 //   res.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self';");
@@ -69,6 +70,58 @@ app.get('/blogpost/:filename', (req, res) => {
 
     res.setHeader("Content-Type", "application/json");
     res.send(data);
+  });
+});
+
+// GET /blogposts - Alle Blogposts auflisten
+app.get('/blogposts', (req, res) => {
+  const postsDir = join(__dirname, 'posts');
+  
+  readdir(postsDir, (err, files) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Fehler beim Lesen der Blogposts' });
+    }
+
+    // Nur JSON-Dateien filtern
+    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    
+    // Alle Blogposts lesen und deren Titel extrahieren
+    const blogPosts = [];
+    let processedFiles = 0;
+
+    if (jsonFiles.length === 0) {
+      return res.json([]);
+    }
+
+    jsonFiles.forEach(file => {
+      const filePath = join(postsDir, file);
+      
+      readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+          console.error(`Fehler beim Lesen von ${file}:`, err);
+        } else {
+          try {
+            const post = JSON.parse(data);
+            blogPosts.push({
+              filename: file,
+              title: post.title,
+              date: post.date,
+              tags: post.tags || []
+            });
+          } catch (parseErr) {
+            console.error(`Fehler beim Parsen von ${file}:`, parseErr);
+          }
+        }
+        
+        processedFiles++;
+        if (processedFiles === jsonFiles.length) {
+          // Sortiere nach Datum (neueste zuerst)
+          blogPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+          res.json(blogPosts);
+        }
+      });
+    });
   });
 });
 

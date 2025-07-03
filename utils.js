@@ -39,3 +39,28 @@ document.getElementById('blogPostForm').addEventListener('submit', async functio
             document.getElementById('responseMessage').textContent = `Fehler: ${error.message}`;
         }
     });
+
+// Funktion zum Laden aller Blogposts
+async function loadAllBlogPosts() {
+    try {
+        const response = await fetch('/blogposts');
+        const posts = await response.json();
+        return posts;
+    } catch (error) {
+        console.error('Fehler beim Laden der Blogposts:', error);
+        return [];
+    }
+}
+
+// Funktion zum Laden eines einzelnen Blogposts
+async function loadBlogPost(filename) {
+    try {
+        const response = await fetch(`/blogpost/${filename}`);
+        const post = await response.json();
+        return post;
+    } catch (error) {
+        console.error('Fehler beim Laden des Blogposts:', error);
+        return null;
+    }
+}
+
