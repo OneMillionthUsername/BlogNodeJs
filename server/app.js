@@ -217,9 +217,176 @@ app.delete('/blogpost/:filename', (req, res) => {
       // View-Count auch entfernen
       delete postViews[fileName];
 
+      // Auch zugehörige Kommentare löschen
+      const commentsFileName = fileName.replace('.json', '_comments.json');
+      const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
+      unlink(commentsFilePath, (commentsErr) => {
+        // Ignoriere Fehler falls Kommentardatei nicht existiert
+        if (commentsErr && commentsErr.code !== 'ENOENT') {
+          console.warn('Warnung: Kommentardatei konnte nicht gelöscht werden:', commentsErr.message);
+        }
+      });
+
       console.log(`Blogpost gelöscht: ${fileName}`);
       res.json({ message: 'Blogpost erfolgreich gelöscht', file: fileName });
     });
+  });
+});
+
+// === KOMMENTAR-API ===
+
+// GET /comments/:postFilename - Kommentare für einen Post abrufen
+app.get('/comments/:postFilename', (req, res) => {
+  const postFilename = req.params.postFilename;
+  const commentsFileName = postFilename.replace('.json', '_comments.json');
+  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
+
+  readFile(commentsFilePath, 'utf8', (err, data) => {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        // Datei existiert nicht - keine Kommentare vorhanden
+        return res.json([]);
+      }
+      console.error('Fehler beim Lesen der Kommentardatei:', err);
+      return res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
+    }
+
+    try {
+      const comments = JSON.parse(data);
+      res.json(comments);
+    } catch (parseErr) {
+      console.error('Fehler beim Parsen der Kommentardatei:', parseErr);
+      res.status(500).json({ error: 'Fehler beim Verarbeiten der Kommentare' });
+    }
+  });
+});
+
+// POST /comments/:postFilename - Neuen Kommentar hinzufügen
+app.post('/comments/:postFilename', (req, res) => {
+  const postFilename = req.params.postFilename;
+  const { username, text } = req.body;
+
+  // Input-Validierung
+  if (!text || text.trim().length === 0) {
+    return res.status(400).json({ error: 'Kommentartext ist erforderlich' });
+  }
+
+  if (text.trim().length > 1000) {
+    return res.status(400).json({ error: 'Kommentar ist zu lang (maximal 1000 Zeichen)' });
+  }
+
+  // Sanitize Input (XSS-Schutz)
+  function sanitizeText(inputText) {
+    return inputText
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;')
+      .trim();
+  }
+
+  const sanitizedText = sanitizeText(text);
+  const sanitizedUsername = username && username.trim() !== '' ? 
+    sanitizeText(username.trim()) : 'Anonym';
+
+  const newComment = {
+    id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+    username: sanitizedUsername,
+    text: sanitizedText,
+    timestamp: new Date().toISOString(),
+    postFilename: postFilename
+  };
+
+  const commentsFileName = postFilename.replace('.json', '_comments.json');
+  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
+  const commentsDir = join(__dirname, '..', 'comments');
+
+  // Comments-Ordner erstellen falls nicht vorhanden
+  mkdir(commentsDir, { recursive: true }, (mkdirErr) => {
+    if (mkdirErr) {
+      console.error('Fehler beim Erstellen des Comments-Ordners:', mkdirErr);
+      return res.status(500).json({ error: 'Fehler beim Speichern des Kommentars' });
+    }
+
+    // Bestehende Kommentare laden oder leeres Array erstellen
+    readFile(commentsFilePath, 'utf8', (readErr, data) => {
+      let comments = [];
+      
+      if (!readErr) {
+        try {
+          comments = JSON.parse(data);
+        } catch (parseErr) {
+          console.error('Fehler beim Parsen bestehender Kommentare:', parseErr);
+          comments = [];
+        }
+      }
+
+      // Neuen Kommentar hinzufügen
+      comments.push(newComment);
+
+      // Kommentare speichern
+      writeFile(commentsFilePath, JSON.stringify(comments, null, 2), (writeErr) => {
+        if (writeErr) {
+          console.error('Fehler beim Speichern der Kommentare:', writeErr);
+          return res.status(500).json({ error: 'Fehler beim Speichern des Kommentars' });
+        }
+
+        console.log(`Neuer Kommentar gespeichert für Post: ${postFilename}`);
+        res.status(201).json({ 
+          message: 'Kommentar erfolgreich gespeichert',
+          comment: newComment
+        });
+      });
+    });
+  });
+});
+
+// DELETE /comments/:postFilename/:commentId - Kommentar löschen (Admin-only)
+app.delete('/comments/:postFilename/:commentId', (req, res) => {
+  const postFilename = req.params.postFilename;
+  const commentId = req.params.commentId;
+  
+  const commentsFileName = postFilename.replace('.json', '_comments.json');
+  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
+
+  readFile(commentsFilePath, 'utf8', (readErr, data) => {
+    if (readErr) {
+      if (readErr.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Keine Kommentare gefunden' });
+      }
+      console.error('Fehler beim Lesen der Kommentardatei:', readErr);
+      return res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
+    }
+
+    try {
+      const comments = JSON.parse(data);
+      const commentIndex = comments.findIndex(comment => comment.id === commentId);
+      
+      if (commentIndex === -1) {
+        return res.status(404).json({ error: 'Kommentar nicht gefunden' });
+      }
+
+      // Kommentar entfernen
+      const deletedComment = comments.splice(commentIndex, 1)[0];
+
+      // Aktualisierte Kommentare speichern
+      writeFile(commentsFilePath, JSON.stringify(comments, null, 2), (writeErr) => {
+        if (writeErr) {
+          console.error('Fehler beim Speichern der aktualisierten Kommentare:', writeErr);
+          return res.status(500).json({ error: 'Fehler beim Löschen des Kommentars' });
+        }
+
+        console.log(`Kommentar gelöscht: ${commentId} aus Post: ${postFilename}`);
+        res.json({ 
+          message: 'Kommentar erfolgreich gelöscht',
+          deletedComment: deletedComment
+        });
+      });
+    } catch (parseErr) {
+      console.error('Fehler beim Parsen der Kommentardatei:', parseErr);
+      res.status(500).json({ error: 'Fehler beim Verarbeiten der Kommentare' });
+    }
   });
 });
 

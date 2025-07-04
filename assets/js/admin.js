@@ -230,13 +230,57 @@ function adminLoginForCreatePage() {
     }
 }
 
+// Admin-Controls für read_post.html hinzufügen
+function addReadPostAdminControls() {
+    if (!checkAdminStatus()) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const postFilename = urlParams.get('post');
+    
+    if (postFilename) {
+        const adminControls = document.getElementById('admin-controls');
+        if (adminControls) {
+            adminControls.innerHTML = `
+                <button onclick="deletePostAndRedirect('${postFilename}')" class="btn btn-danger" style="
+                    background: #e74c3c;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 25px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    margin-top: 10px;
+                ">
+                    🗑️ Diesen Post löschen
+                </button>
+            `;
+        }
+    }
+}
+
+// Post löschen und zur Post-Liste weiterleiten (spezifisch für read_post.html)
+async function deletePostAndRedirect(filename) {
+    const deleted = await deletePost(filename);
+    if (deleted) {
+        // Nach dem Löschen zur Post-Liste weiterleiten
+        window.location.href = 'list_posts.html';
+    }
+}
+
 // Admin-System initialisieren
 function initializeAdminSystem() {
     checkAdminStatus();
     updateNavigationVisibility();
     if (isAdminLoggedIn) {
         createAdminToolbar();
+        // Kommentare mit Admin-Funktionen neu laden falls sie bereits angezeigt werden
+        if (typeof initializeCommentsSystem === 'function') {
+            setTimeout(initializeCommentsSystem, 100);
+        }
     } else {
         createAdminLoginButton();
     }
 }
+
+// Globale Verfügbarmachung der checkAdminStatus Funktion für comments.js
+window.checkAdminStatus = checkAdminStatus;

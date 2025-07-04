@@ -6,10 +6,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/admin.js"></script>
+    <script src="../assets/js/comments.js"></script>
     <title>Blogpost - Sub specie aeternitatis</title>
 </head>
 <body>
@@ -41,6 +43,63 @@
                                 <div id="tags" class="post-tags-container"></div>
                             </footer>
                         </article>
+                        
+                        <!-- Kommentarsystem -->
+                        <section id="comments-section" class="comments-section" style="display: none;">
+                            <div class="comments-divider">
+                                <hr>
+                            </div>
+                            
+                            <h3 id="comments-title" class="comments-title">
+                                💬 Kommentare <span class="badge badge-secondary" id="comment-count">0</span>
+                            </h3>
+                            
+                            <!-- Kommentar-Formular -->
+                            <div class="comment-form-container">
+                                <h4 class="mb-3">✍️ Kommentar schreiben</h4>
+                                <form id="comment-form" class="comment-form">
+                                    <div class="form-group">
+                                        <label for="comment-username">Name (optional):</label>
+                                        <input type="text" 
+                                               id="comment-username" 
+                                               class="form-control" 
+                                               placeholder="Dein Name oder lasse es leer für 'Anonym'"
+                                               maxlength="50">
+                                        <small class="form-text text-muted">
+                                            Falls leer gelassen, wird "Anonym" angezeigt.
+                                        </small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="comment-text">Kommentar: <span class="text-danger">*</span></label>
+                                        <textarea id="comment-text" 
+                                                  class="form-control" 
+                                                  rows="4" 
+                                                  placeholder="Teile deine Gedanken zu diesem Blogpost..."
+                                                  maxlength="1000"
+                                                  required></textarea>
+                                        <div class="d-flex justify-content-between align-items-center mt-1">
+                                            <small class="form-text text-muted">
+                                                Sei respektvoll und konstruktiv in deinen Kommentaren.
+                                            </small>
+                                            <small id="char-counter" class="char-counter text-muted">0/1000</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane"></i> Kommentar senden
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <!-- Kommentare anzeigen -->
+                            <div class="comments-list-container">
+                                <h4 class="mb-3">💭 Diskussion</h4>
+                                <div id="comments-list" class="comments-list">
+                                    <!-- Kommentare werden hier dynamisch eingefügt -->
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -62,48 +121,20 @@
             loadAndDisplayBlogPost();
         });
         
-        // Admin-Controls für read_post.html hinzufügen
-        function addReadPostAdminControls() {
-            if (!checkAdminStatus()) return;
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const postFilename = urlParams.get('post');
-            
-            if (postFilename) {
-                const adminControls = document.getElementById('admin-controls');
-                if (adminControls) {
-                    adminControls.innerHTML = `
-                        <button onclick="deletePostAndRedirect('${postFilename}')" class="btn btn-danger" style="
-                            background: #e74c3c;
-                            color: white;
-                            border: none;
-                            padding: 10px 20px;
-                            border-radius: 25px;
-                            cursor: pointer;
-                            font-weight: 500;
-                            margin-top: 10px;
-                        ">
-                            🗑️ Diesen Post löschen
-                        </button>
-                    `;
-                }
-            }
-        }
-        
-        // Post löschen und zur Post-Liste weiterleiten
-        async function deletePostAndRedirect(filename) {
-            const deleted = await deletePost(filename);
-            if (deleted) {
-                // Nach dem Löschen zur Post-Liste weiterleiten
-                window.location.href = 'list_posts.html';
-            }
-        }
-        
         // Admin-Controls nach dem Laden des Posts hinzufügen
         const originalUpdateBlogPostUI = updateBlogPostUI;
         updateBlogPostUI = function(post) {
             originalUpdateBlogPostUI(post);
             setTimeout(addReadPostAdminControls, 100);
+            
+            // Kommentarsystem nach dem Laden des Posts anzeigen
+            setTimeout(function() {
+                const commentsSection = document.getElementById('comments-section');
+                if (commentsSection) {
+                    commentsSection.style.display = 'block';
+                    initializeCommentsSystem();
+                }
+            }, 200);
         };
     </script>
 </body>

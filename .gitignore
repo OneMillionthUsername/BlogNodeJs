@@ -139,3 +139,7 @@ drafts/
 
 # Test-Posts (optional - entfernen Sie diese Zeile wenn Sie Test-Posts committen möchten)
 posts/test-*.json
+
+# Content & Data
+# Kommentare (optional, je nach Deployment-Strategie)
+# comments/
