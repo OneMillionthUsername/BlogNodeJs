@@ -27,7 +27,7 @@
                     <div class="alert alert-warning text-center">
                         <h4>🔒 Zugriff verweigert</h4>
                         <p>Sie müssen sich als Administrator anmelden, um Blogposts erstellen zu können.</p>
-                        <button onclick="adminLoginForCreatePage()" class="btn btn-primary">
+                        <button onclick="adminLogin(true)" class="btn btn-primary">
                             👑 Als Admin anmelden
                         </button>
                         <a href="../index.html" class="btn btn-outline-secondary ml-2">
@@ -161,13 +161,14 @@
                     </form>
                     
                     <div id="responseMessage" class="response-message"></div>
+                    
+                    <!-- Navigation nur für eingeloggte Admins -->
+                    <div class="navigation text-center mt-4">
+                        <a href="../index.html" class="btn btn-outline-primary">🏠 Zurück zur Startseite</a>
+                        <a href="list_posts.html" class="btn btn-outline-secondary ml-2">📚 Alle Blogposts</a>
+                    </div>
                 </div> <!-- End create-content -->
             </div>
-        </div>
-        
-        <div class="navigation text-center mt-4">
-            <a href="../index.html" class="btn btn-outline-primary">🏠 Zurück zur Startseite</a>
-            <a href="list_posts.html" class="btn btn-outline-secondary ml-2">📚 Alle Blogposts</a>
         </div>
     </div>
     

@@ -17,7 +17,8 @@ console.log(`Serververzeichnis: ${__dirname}`);
 //   res.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self';");
 //   next();
 // });
-app.use(json()); // JSON-Body parsen
+app.use(json({ limit: '50mb' })); // JSON-Body parsen mit erhöhtem Limit für Bilder
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL-encoded Bodies mit erhöhtem Limit
 
 app.use(express.static(publicDirectoryPath)); // Statische Dateien aus dem 'posts'-Ordner bereitstellen
 
@@ -394,18 +395,32 @@ app.delete('/comments/:postFilename/:commentId', (req, res) => {
 
 // POST /upload/image - Bild hochladen
 app.post('/upload/image', (req, res) => {
-  // Multer für File-Upload wird hier verwendet (siehe unten)
-  // Für jetzt implementieren wir eine einfache Base64-Version
+  console.log(`📸 Bild-Upload-Anfrage erhalten`);
   
   const { imageData, filename } = req.body;
   
   if (!imageData || !filename) {
+    console.error('❌ Upload-Fehler: Fehlende Daten');
     return res.status(400).json({ error: 'Bilddaten und Dateiname sind erforderlich' });
   }
   
   try {
+    // Größe des base64-Strings prüfen (ungefähre Dateigröße)
+    const estimatedSize = imageData.length * 0.75 / 1024 / 1024; // MB
+    console.log(`📊 Geschätzte Bildgröße: ${estimatedSize.toFixed(2)} MB`);
+    
+    // Warnung bei sehr großen Bildern
+    if (estimatedSize > 45) {
+      console.warn(`⚠️ Sehr große Bilddatei: ${estimatedSize.toFixed(2)} MB`);
+    }
+    
     // Base64-Daten extrahieren (entferne data:image/...;base64, prefix)
     const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+    
+    // Validierung: Prüfe ob es gültiges Base64 ist
+    if (!base64Data || base64Data.length < 100) {
+      return res.status(400).json({ error: 'Ungültige Bilddaten' });
+    }
     
     // Dateiname sanitisieren
     function sanitizeImageFilename(name) {
@@ -431,22 +446,32 @@ app.post('/upload/image', (req, res) => {
     const uploadsDir = join(__dirname, '..', 'assets', 'uploads');
     const imagePath = join(uploadsDir, sanitizedFilename);
     
+    console.log(`💾 Speichere Bild: ${sanitizedFilename}`);
+    
     // Uploads-Ordner erstellen falls nicht vorhanden
     mkdir(uploadsDir, { recursive: true }, (mkdirErr) => {
       if (mkdirErr) {
-        console.error('Fehler beim Erstellen des Uploads-Ordners:', mkdirErr);
+        console.error('❌ Fehler beim Erstellen des Uploads-Ordners:', mkdirErr);
         return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
       }
       
       // Bild speichern
       writeFile(imagePath, base64Data, 'base64', (writeErr) => {
         if (writeErr) {
-          console.error('Fehler beim Speichern des Bildes:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+          console.error('❌ Fehler beim Speichern des Bildes:', writeErr);
+          
+          // Spezifische Fehlerbehandlung
+          if (writeErr.code === 'ENOSPC') {
+            return res.status(507).json({ error: 'Nicht genügend Speicherplatz auf dem Server' });
+          } else if (writeErr.code === 'EACCES') {
+            return res.status(500).json({ error: 'Keine Berechtigung zum Speichern' });
+          } else {
+            return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+          }
         }
         
         const imageUrl = `/assets/uploads/${sanitizedFilename}`;
-        console.log(`✅ Bild gespeichert: ${sanitizedFilename}`);
+        console.log(`✅ Bild gespeichert: ${sanitizedFilename} (Größe: ${estimatedSize.toFixed(2)} MB)`);
         
         res.json({
           message: 'Bild erfolgreich hochgeladen',

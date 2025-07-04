@@ -277,7 +277,7 @@ async function initializeTinyMCE() {
         paste_webkit_styles: 'all',
         paste_retain_style_properties: 'color font-size font-family background-color',
         
-        // Bild-Upload-Konfiguration (Server-basiert)
+        // Bild-Upload-Konfiguration (Server-basiert mit Komprimierung)
         images_upload_handler: function(blobInfo, success, failure, progress) {
             console.log('📸 Lade Bild hoch:', blobInfo.filename());
             
@@ -286,67 +286,73 @@ async function initializeTinyMCE() {
                 progress(0);
             }
             
-            // Bild als Base64 konvertieren
-            const reader = new FileReader();
-            reader.onload = function() {
-                const base64Data = reader.result;
-                
-                // Zu Server senden
-                fetch('/upload/image', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        imageData: base64Data,
-                        filename: blobInfo.filename() || 'upload.jpg'
-                    })
-                })
-                .then(response => {
-                    if (progress) {
-                        progress(50);
-                    }
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(result => {
-                    if (progress) {
-                        progress(100);
-                    }
-                    
-                    console.log('✅ Bild erfolgreich hochgeladen:', result);
-                    
-                    // TinyMCE die Server-URL mitteilen
-                    success(result.location || result.url);
-                    
-                    // Erfolgs-Feedback anzeigen
-                    showNotification(`Bild "${result.filename}" erfolgreich hochgeladen! 📸`, 'success');
-                })
-                .catch(error => {
-                    console.error('❌ Fehler beim Hochladen des Bildes:', error);
-                    failure('Fehler beim Hochladen: ' + error.message, { remove: true });
-                    showNotification('Fehler beim Hochladen des Bildes: ' + error.message, 'error');
-                });
-            };
-            
-            reader.onerror = function() {
-                failure('Fehler beim Lesen der Bilddatei', { remove: true });
-            };
-            
-            reader.readAsDataURL(blobInfo.blob());
+            // Bild komprimieren und hochladen
+            compressAndUploadImage(blobInfo, success, failure, progress);
         },
         
         // Erweiterte Upload-Einstellungen
         images_upload_url: '/upload/image',
         images_upload_base_path: '/assets/uploads/',
         images_upload_credentials: false,
+        file_picker_types: 'image',
+        
+        // Datei-Validierung
+        images_file_types: 'jpg,jpeg,png,gif,webp,svg',
+        
+        // Drag & Drop Konfiguration
+        paste_data_images: true,
+        images_dataimg_filter: function(img) {
+            // Filtere nur erlaubte Bildtypen
+            return img.src.indexOf('data:image/') === 0;
+        },
         
         // Automatische Upload-Funktionen
         automatic_uploads: true,
         images_reuse_filename: false,
+        
+        // Upload-Handler für verschiedene Szenarien
+        file_picker_callback: function(callback, value, meta) {
+            if (meta.filetype === 'image') {
+                const input = document.createElement('input');
+                input.setAttribute('type', 'file');
+                input.setAttribute('accept', 'image/*');
+                
+                input.onchange = function() {
+                    const file = this.files[0];
+                    
+                    // Größe prüfen (max 25MB vor Komprimierung)
+                    if (file.size > 25 * 1024 * 1024) {
+                        showNotification('Bild ist zu groß (max. 25MB). Bitte wählen Sie ein kleineres Bild.', 'error');
+                        return;
+                    }
+                    
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        // Bild über Standard-Upload-Handler hochladen
+                        const blobInfo = {
+                            blob: () => file,
+                            filename: () => file.name
+                        };
+                        
+                        compressAndUploadImage(
+                            blobInfo,
+                            function(url) {
+                                callback(url, { alt: file.name });
+                            },
+                            function(error) {
+                                showNotification('Fehler beim Hochladen: ' + error, 'error');
+                            },
+                            function(progress) {
+                                console.log('Upload-Fortschritt:', progress + '%');
+                            }
+                        );
+                    };
+                    reader.readAsDataURL(file);
+                };
+                
+                input.click();
+            }
+        },
         
         // Erweiterte Einstellungen
         convert_urls: false,
@@ -428,7 +434,7 @@ function showNotification(message, type = 'info') {
     `;
     notification.style.cssText = `
         position: fixed;
-        top: 20px;
+        top: 60px;
         right: 20px;
         z-index: 9999;
         min-width: 300px;
@@ -713,6 +719,316 @@ function showImageGallery() {
     // Hier könnte eine Modal-Galerie implementiert werden
     // Für jetzt: einfacher Platzhalter
     alert('Bildergalerie wird in einer zukünftigen Version implementiert.');
+}
+
+// Bild-Komprimierung und Upload-Funktion
+async function compressAndUploadImage(blobInfo, success, failure, progress) {
+    try {
+        const blob = blobInfo.blob();
+        const filename = blobInfo.filename() || 'upload.jpg';
+        const originalSize = blob.size / 1024 / 1024; // MB
+        
+        console.log(`📸 Komprimiere Bild: ${filename} (${originalSize.toFixed(2)} MB)`);
+        
+        // Bildvalidierung vor Upload
+        try {
+            validateImageBeforeUpload(blob);
+        } catch (validationError) {
+            failure(validationError.message, { remove: true });
+            showNotification(`❌ ${validationError.message}`, 'error');
+            return;
+        }
+        
+        if (progress) {
+            progress(10);
+        }
+        
+        // Intelligente Komprimierung basierend auf Dateigröße
+        let quality = 0.9;
+        let maxWidth = 1920;
+        let maxHeight = 1080;
+        
+        if (originalSize > 10) {
+            quality = 0.6;
+            maxWidth = 1280;
+            maxHeight = 720;
+        } else if (originalSize > 5) {
+            quality = 0.7;
+            maxWidth = 1600;
+            maxHeight = 900;
+        } else if (originalSize > 2) {
+            quality = 0.8;
+        }
+        
+        console.log(`🎯 Komprimierungseinstellungen: Qualität ${quality}, Max-Größe ${maxWidth}x${maxHeight}`);
+        
+        // Bild komprimieren
+        const compressedBase64 = await compressImage(blob, quality, maxWidth, maxHeight);
+        
+        if (progress) {
+            progress(30);
+        }
+        
+        // Komprimierungsrate berechnen
+        const compressedSize = compressedBase64.length * 0.75 / 1024 / 1024; // Ungefähre Größe nach Base64-Dekodierung
+        const compressionRate = ((originalSize - compressedSize) / originalSize * 100);
+        
+        console.log(`🗜️ Bild komprimiert: ${originalSize.toFixed(2)} MB → ${compressedSize.toFixed(2)} MB (${compressionRate.toFixed(1)}% Reduktion)`);
+        
+        // Fallback: Wenn das Bild immer noch zu groß ist, aggressiver komprimieren
+        let finalBase64 = compressedBase64;
+        if (compressedSize > 40) { // Mehr als 40MB nach Komprimierung
+            console.log('⚠️ Bild immer noch sehr groß - verwende aggressive Komprimierung...');
+            finalBase64 = await compressImage(blob, 0.4, 1024, 768);
+            
+            if (progress) {
+                progress(40);
+            }
+        }
+        
+        // Zu Server senden mit Retry-Logik - übergebe das ursprüngliche Blob für weitere Komprimierung
+        await uploadWithRetry(finalBase64, filename, blob, success, failure, progress);
+        
+    } catch (error) {
+        console.error('❌ Fehler beim Hochladen des Bildes:', error);
+        await handleUploadError(error, blobInfo, success, failure);
+    }
+}
+
+// Vereinfachte Upload-Fehlerbehandlung (hauptsächlich für nicht-komprimierbare Fehler)
+async function handleUploadError(error, blobInfo, success, failure) {
+    const filename = blobInfo.filename() || 'upload.jpg';
+    
+    console.error(`❌ Upload-Fehler für ${filename}:`, error);
+    
+    // Spezifische Fehlerbehandlung für verschiedene Fehlertypen
+    if (error.message.includes('Network') || error.message.includes('fetch')) {
+        failure('Netzwerkfehler beim Upload. Bitte prüfen Sie Ihre Internetverbindung.', { remove: true });
+        showNotification('❌ Netzwerkfehler beim Upload - bitte Internetverbindung prüfen', 'error');
+    } else if (error.message.includes('500')) {
+        failure('Server-Fehler beim Upload. Bitte versuchen Sie es später erneut.', { remove: true });
+        showNotification('❌ Server-Fehler beim Upload - bitte später versuchen', 'error');
+    } else if (error.message.includes('413') || error.message.includes('Payload Too Large')) {
+        failure('Bild ist zu groß. Bitte verwenden Sie ein kleineres Bild (empfohlen: < 2MB).', { remove: true });
+        showNotification('❌ Bild zu groß - bitte verwenden Sie ein kleineres Bild', 'error');
+    } else if (error.message.includes('400')) {
+        failure('Ungültiges Bildformat. Unterstützt werden: JPG, PNG, GIF, WebP.', { remove: true });
+        showNotification('❌ Ungültiges Bildformat', 'error');
+    } else {
+        failure('Unbekannter Fehler beim Upload: ' + error.message, { remove: true });
+        showNotification('❌ Upload-Fehler: ' + error.message, 'error');
+    }
+}
+
+// Upload-Fortschritts-Anzeige
+function showUploadProgress(filename, progress) {
+    let progressContainer = document.getElementById('upload-progress');
+    
+    if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'upload-progress';
+        progressContainer.style.cssText = `
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            z-index: 10000;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 300px;
+        `;
+        document.body.appendChild(progressContainer);
+    }
+    
+    progressContainer.innerHTML = `
+        <div class="upload-item">
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <i class="fas fa-upload" style="margin-right: 10px; color: #3498db;"></i>
+                <span style="font-weight: 500;">${filename}</span>
+            </div>
+            <div class="progress" style="height: 8px; background-color: #f0f0f0; border-radius: 4px;">
+                <div class="progress-bar" style="
+                    width: ${progress}%; 
+                    height: 100%; 
+                    background-color: #3498db; 
+                    border-radius: 4px;
+                    transition: width 0.3s ease;
+                "></div>
+            </div>
+            <div style="text-align: center; margin-top: 5px; font-size: 12px; color: #666;">
+                ${progress}% hochgeladen
+            </div>
+        </div>
+    `;
+    
+    if (progress >= 100) {
+        setTimeout(() => {
+            if (progressContainer.parentNode) {
+                progressContainer.parentNode.removeChild(progressContainer);
+            }
+        }, 2000);
+    }
+}
+
+// Bild-Komprimierungsfunktion
+function compressImage(file, quality = 0.8, maxWidth = 1920, maxHeight = 1080) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = function() {
+            // Berechne neue Dimensionen unter Beibehaltung des Seitenverhältnisses
+            let { width, height } = img;
+            
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width *= ratio;
+                height *= ratio;
+            }
+            
+            // Canvas-Größe setzen
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Bild auf Canvas zeichnen
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Als komprimiertes Base64 ausgeben
+            try {
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedDataUrl);
+            } catch (error) {
+                reject(new Error('Fehler bei der Bild-Komprimierung: ' + error.message));
+            }
+        };
+        
+        img.onerror = function() {
+            reject(new Error('Fehler beim Laden des Bildes für die Komprimierung'));
+        };
+        
+        // FileReader für Blob-zu-Image Konvertierung
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+        };
+        reader.onerror = function() {
+            reject(new Error('Fehler beim Lesen der Bilddatei'));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Upload mit Retry-Logik und progressiver Komprimierung
+async function uploadWithRetry(base64Data, filename, originalBlob, success, failure, progress, attempt = 1) {
+    const maxAttempts = 3;
+    
+    try {
+        console.log(`📤 Upload-Versuch ${attempt}/${maxAttempts} für: ${filename}`);
+        
+        const response = await fetch('/upload/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imageData: base64Data,
+                filename: filename
+            })
+        });
+        
+        if (progress) {
+            progress(50 + (attempt * 15));
+        }
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (progress) {
+            progress(100);
+        }
+        
+        console.log('✅ Bild erfolgreich hochgeladen:', result);
+        success(result.location || result.url);
+        showNotification(`Bild "${result.filename}" erfolgreich hochgeladen! 📸`, 'success');
+        
+    } catch (error) {
+        console.error(`❌ Upload-Versuch ${attempt} fehlgeschlagen:`, error);
+        
+        // Bei 413 (Payload Too Large) oder ähnlichen Größen-Fehlern und wenn noch Versuche übrig sind
+        if ((error.message.includes('413') || error.message.includes('Payload Too Large') || error.message.includes('entity too large')) && attempt < maxAttempts) {
+            
+            // Progressive Komprimierungseinstellungen für weitere Versuche
+            const compressionSettings = [
+                { quality: 0.6, width: 1280, height: 720 },  // Versuch 2
+                { quality: 0.4, width: 1024, height: 576 },  // Versuch 3
+            ];
+            
+            const settings = compressionSettings[attempt - 1];
+            
+            showNotification(`Bild zu groß - versuche stärkere Komprimierung (${Math.round(settings.quality * 100)}% Qualität)...`, 'info');
+            
+            try {
+                // Mit dem ursprünglichen Blob neu komprimieren
+                const newCompressed = await compressImage(
+                    originalBlob, 
+                    settings.quality, 
+                    settings.width, 
+                    settings.height
+                );
+                
+                // Neue Größe berechnen und loggen
+                const newSize = newCompressed.length * 0.75 / 1024 / 1024;
+                console.log(`🗜️ Erneut komprimiert zu ${newSize.toFixed(2)} MB mit ${Math.round(settings.quality * 100)}% Qualität`);
+                
+                return await uploadWithRetry(newCompressed, filename, originalBlob, success, failure, progress, attempt + 1);
+                
+            } catch (compressionError) {
+                console.error('Fehler bei der Rekomprimierung:', compressionError);
+                failure(`Komprimierungsfehler: ${compressionError.message}`, { remove: true });
+                showNotification('❌ Fehler bei der Bildkomprimierung', 'error');
+                return;
+            }
+        } else {
+            // Maximale Versuche erreicht oder anderer Fehler
+            let errorMessage;
+            
+            if (error.message.includes('413') || error.message.includes('Payload Too Large') || error.message.includes('entity too large')) {
+                errorMessage = 'Bild ist auch nach maximaler Komprimierung zu groß. Bitte verwenden Sie ein kleineres Bild (empfohlen: < 2MB)';
+            } else if (error.message.includes('Network') || error.message.includes('fetch')) {
+                errorMessage = 'Netzwerkfehler beim Upload. Bitte prüfen Sie Ihre Internetverbindung.';
+            } else if (error.message.includes('500')) {
+                errorMessage = 'Server-Fehler beim Upload. Bitte versuchen Sie es später erneut.';
+            } else {
+                errorMessage = `Upload-Fehler: ${error.message}`;
+            }
+            
+            failure(errorMessage, { remove: true });
+            showNotification(`❌ ${errorMessage}`, 'error');
+        }
+    }
+}
+
+// Bildvalidierung vor dem Upload
+function validateImageBeforeUpload(file) {
+    const maxSize = 100 * 1024 * 1024; // 100MB absolutes Maximum
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
+    if (file.size > maxSize) {
+        throw new Error(`Bild ist zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum: 100MB`);
+    }
+    
+    if (!allowedTypes.includes(file.type)) {
+        throw new Error(`Ungültiger Dateityp: ${file.type}. Unterstützt: JPG, PNG, GIF, WebP`);
+    }
+    
+    return true;
 }
 
 // Initialisierung und Event Listener
