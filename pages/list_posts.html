@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="../assets/js/utils.js"></script>
     <title>Alle Blogposts - Sub specie aeternitatis</title>
 </head>
 <body>
@@ -47,117 +48,8 @@
     </div>
 
     <script>
-        async function loadBlogPosts() {
-            try {
-                const response = await fetch('/blogposts');
-                const posts = await response.json();
-                
-                const listContainer = document.getElementById('blogPostsList');
-                
-                // Filtere Posts der letzten 3 Monate
-                const threeMonthsAgo = new Date();
-                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                
-                const recentPosts = posts.filter(post => {
-                    const postDate = new Date(post.date);
-                    return postDate >= threeMonthsAgo;
-                });
-                
-                if (recentPosts.length === 0) {
-                    listContainer.innerHTML = `
-                        <div class="no-posts">
-                            <div class="no-posts-icon">📝</div>
-                            <h3>Keine aktuellen Blogposts</h3>
-                            <p>In den letzten 3 Monaten wurden keine Blogposts veröffentlicht.</p>
-                            <a href="create.html" class="btn btn-outline-primary mt-3">✍️ Ersten Post erstellen</a>
-                        </div>
-                    `;
-                    return;
-                }
-
-                let html = `
-                    <div class="posts-count">
-                        <span class="count-number">${recentPosts.length}</span> 
-                        <span class="count-text">Blogpost${recentPosts.length !== 1 ? 's' : ''} in den letzten 3 Monaten</span>
-                    </div>
-                    <div class="blog-posts-grid">
-                `;
-                
-                recentPosts.forEach((post, index) => {
-                    const postDate = new Date(post.date);
-                    const formattedDate = postDate.toLocaleDateString('de-DE', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                    });
-                    
-                    // Zeitabstand berechnen
-                    const timeDiff = new Date() - postDate;
-                    const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-                    let timeAgo = '';
-                    
-                    if (daysDiff < 1) {
-                        timeAgo = 'Heute';
-                    } else if (daysDiff < 7) {
-                        timeAgo = `vor ${daysDiff} Tag${daysDiff !== 1 ? 'en' : ''}`;
-                    } else if (daysDiff < 30) {
-                        const weeksDiff = Math.floor(daysDiff / 7);
-                        timeAgo = `vor ${weeksDiff} Woche${weeksDiff !== 1 ? 'n' : ''}`;
-                    } else {
-                        const monthsDiff = Math.floor(daysDiff / 30);
-                        timeAgo = `vor ${monthsDiff} Monat${monthsDiff !== 1 ? 'en' : ''}`;
-                    }
-                    
-                    const isNew = daysDiff <= 7;
-                    
-                    html += `
-                        <article class="post-card ${isNew ? 'post-card-new' : ''}">
-                            ${isNew ? '<div class="new-badge">NEU</div>' : ''}
-                            <div class="post-card-header">
-                                <h3 class="post-card-title">
-                                    <a href="read_post.html?post=${post.filename}">${post.title}</a>
-                                </h3>
-                                <div class="post-card-meta">
-                                    <span class="post-date">📅 ${formattedDate}</span>
-                                    <span class="post-time-ago">${timeAgo}</span>
-                                </div>
-                            </div>
-                            
-                            <div class="post-card-content">
-                                ${post.tags.length > 0 ? `
-                                    <div class="post-card-tags">
-                                        🏷️ ${post.tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}
-                                    </div>
-                                ` : ''}
-                                
-                                <div class="post-card-actions">
-                                    <a href="read_post.html?post=${post.filename}" class="read-more-btn">
-                                        📖 Weiterlesen
-                                    </a>
-                                </div>
-                            </div>
-                        </article>
-                    `;
-                });
-                
-                html += '</div>';
-                listContainer.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Fehler beim Laden der Blogposts:', error);
-                document.getElementById('blogPostsList').innerHTML = `
-                    <div class="error-message">
-                        <div class="error-icon">❌</div>
-                        <h3>Fehler beim Laden</h3>
-                        <p>Die Blogposts konnten nicht geladen werden.</p>
-                        <button onclick="loadBlogPosts()" class="btn btn-outline-primary mt-3">🔄 Erneut versuchen</button>
-                    </div>
-                `;
-            }
-        }
-
-        // Blogposts laden wenn die Seite geladen wird
-        window.addEventListener('load', loadBlogPosts);
+        // Initialisiere die Recent Posts nach dem Laden der Seite
+        window.addEventListener('load', loadAndDisplayRecentPosts);
     </script>
 </body>
 </html>
