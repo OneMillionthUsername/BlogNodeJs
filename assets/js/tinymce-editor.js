@@ -183,16 +183,76 @@ function initializeTinyMCE() {
         paste_webkit_styles: 'all',
         paste_retain_style_properties: 'color font-size font-family background-color',
         
-        // Bild-Upload-Konfiguration (falls Server-Support vorhanden)
-        images_upload_handler: function(blobInfo, success, failure) {
-            // Hier könnte ein Bild-Upload zu Ihrem Server implementiert werden
-            // Für jetzt verwenden wir Data URLs
+        // Bild-Upload-Konfiguration (Server-basiert)
+        images_upload_handler: function(blobInfo, success, failure, progress) {
+            console.log('📸 Lade Bild hoch:', blobInfo.filename());
+            
+            // Progress-Callback für Upload-Fortschritt
+            if (progress) {
+                progress(0);
+            }
+            
+            // Bild als Base64 konvertieren
             const reader = new FileReader();
             reader.onload = function() {
-                success(reader.result);
+                const base64Data = reader.result;
+                
+                // Zu Server senden
+                fetch('/upload/image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        imageData: base64Data,
+                        filename: blobInfo.filename() || 'upload.jpg'
+                    })
+                })
+                .then(response => {
+                    if (progress) {
+                        progress(50);
+                    }
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    if (progress) {
+                        progress(100);
+                    }
+                    
+                    console.log('✅ Bild erfolgreich hochgeladen:', result);
+                    
+                    // TinyMCE die Server-URL mitteilen
+                    success(result.location || result.url);
+                    
+                    // Erfolgs-Feedback anzeigen
+                    showNotification(`Bild "${result.filename}" erfolgreich hochgeladen! 📸`, 'success');
+                })
+                .catch(error => {
+                    console.error('❌ Fehler beim Hochladen des Bildes:', error);
+                    failure('Fehler beim Hochladen: ' + error.message, { remove: true });
+                    showNotification('Fehler beim Hochladen des Bildes: ' + error.message, 'error');
+                });
             };
+            
+            reader.onerror = function() {
+                failure('Fehler beim Lesen der Bilddatei', { remove: true });
+            };
+            
             reader.readAsDataURL(blobInfo.blob());
         },
+        
+        // Erweiterte Upload-Einstellungen
+        images_upload_url: '/upload/image',
+        images_upload_base_path: '/assets/uploads/',
+        images_upload_credentials: false,
+        
+        // Automatische Upload-Funktionen
+        automatic_uploads: true,
+        images_reuse_filename: false,
         
         // Erweiterte Einstellungen
         convert_urls: false,
@@ -206,6 +266,8 @@ function initializeTinyMCE() {
                 console.log('TinyMCE Editor wurde initialisiert');
                 // Prüfe auf gespeicherte Entwürfe
                 checkForDrafts();
+                // Drag & Drop initialisieren
+                setTimeout(initializeDragAndDrop, 500);
             });
             
             editor.on('input keyup paste', function() {
@@ -220,6 +282,17 @@ function initializeTinyMCE() {
             editor.on('RestoredDraft', function() {
                 console.log('Entwurf wurde wiederhergestellt');
                 showNotification('Entwurf wiederhergestellt', 'info');
+                updatePreview();
+            });
+            
+            // Bild-Upload Events
+            editor.on('BeforeUpload', function() {
+                console.log('🔄 Bild-Upload startet...');
+                showNotification('Lade Bild hoch...', 'info');
+            });
+            
+            editor.on('UploadComplete', function() {
+                console.log('✅ Bild-Upload abgeschlossen');
                 updatePreview();
             });
         },
@@ -455,6 +528,97 @@ function resetForm() {
         clearDraft();
         showNotification('Formular zurückgesetzt', 'info');
     }
+}
+
+// Erweiterte Bild-Management-Funktionen
+
+// Alle hochgeladenen Bilder auflisten (für Admin)
+async function listUploadedImages() {
+    try {
+        const response = await fetch('/api/images');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Fehler beim Laden der Bilderliste:', error);
+        return [];
+    }
+}
+
+// Bild löschen (Admin-only)
+async function deleteUploadedImage(filename) {
+    if (!window.checkAdminStatus || !window.checkAdminStatus()) {
+        alert('Nur Administratoren können Bilder löschen.');
+        return false;
+    }
+    
+    if (!confirm(`Möchten Sie das Bild "${filename}" wirklich löschen?`)) {
+        return false;
+    }
+    
+    try {
+        const response = await fetch(`/assets/uploads/${filename}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Unbekannter Fehler');
+        }
+        
+        const result = await response.json();
+        showNotification(`Bild "${filename}" erfolgreich gelöscht.`, 'info');
+        return true;
+    } catch (error) {
+        console.error('Fehler beim Löschen des Bildes:', error);
+        alert('Fehler beim Löschen: ' + error.message);
+        return false;
+    }
+}
+
+// Drag & Drop für Bilder im Editor
+function initializeDragAndDrop() {
+    const editor = tinymce.get('content');
+    if (!editor) return;
+    
+    // Drag & Drop Events
+    editor.on('dragover', function(e) {
+        e.preventDefault();
+        editor.getContainer().style.borderColor = '#3498db';
+    });
+    
+    editor.on('dragleave', function(e) {
+        e.preventDefault();
+        editor.getContainer().style.borderColor = '';
+    });
+    
+    editor.on('drop', function(e) {
+        e.preventDefault();
+        editor.getContainer().style.borderColor = '';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            Array.from(files).forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    // TinyMCE wird automatisch den Upload-Handler aufrufen
+                    console.log('📸 Bild via Drag & Drop:', file.name);
+                }
+            });
+        }
+    });
+}
+
+// Bild-Galerie für den Editor (erweiterte Funktion)
+function showImageGallery() {
+    if (!window.checkAdminStatus || !window.checkAdminStatus()) {
+        alert('Nur Administratoren können die Bildergalerie verwenden.');
+        return;
+    }
+    
+    // Hier könnte eine Modal-Galerie implementiert werden
+    // Für jetzt: einfacher Platzhalter
+    alert('Bildergalerie wird in einer zukünftigen Version implementiert.');
 }
 
 // Initialisierung und Event Listener

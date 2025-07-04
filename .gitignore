@@ -143,3 +143,6 @@ posts/test-*.json
 # Content & Data
 # Kommentare (optional, je nach Deployment-Strategie)
 # comments/
+
+# Hochgeladene Bilder (optional, je nach Deployment-Strategie)
+# assets/uploads/

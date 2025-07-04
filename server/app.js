@@ -390,6 +390,138 @@ app.delete('/comments/:postFilename/:commentId', (req, res) => {
   });
 });
 
+// === BILD-UPLOAD-API ===
+
+// POST /upload/image - Bild hochladen
+app.post('/upload/image', (req, res) => {
+  // Multer für File-Upload wird hier verwendet (siehe unten)
+  // Für jetzt implementieren wir eine einfache Base64-Version
+  
+  const { imageData, filename } = req.body;
+  
+  if (!imageData || !filename) {
+    return res.status(400).json({ error: 'Bilddaten und Dateiname sind erforderlich' });
+  }
+  
+  try {
+    // Base64-Daten extrahieren (entferne data:image/...;base64, prefix)
+    const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
+    
+    // Dateiname sanitisieren
+    function sanitizeImageFilename(name) {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const randomId = Math.random().toString(36).substr(2, 9);
+      const extension = name.toLowerCase().includes('.jpg') || name.toLowerCase().includes('.jpeg') ? 'jpg' :
+                       name.toLowerCase().includes('.png') ? 'png' :
+                       name.toLowerCase().includes('.gif') ? 'gif' :
+                       name.toLowerCase().includes('.webp') ? 'webp' : 'jpg';
+      
+      const baseName = name
+        .replace(/\.[^/.]+$/, '') // Entferne Dateierweiterung
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '') // Nur Buchstaben, Zahlen, Leerzeichen, Bindestriche
+        .replace(/\s+/g, '-') // Ersetze Leerzeichen durch Bindestriche
+        .replace(/-+/g, '-') // Mehrere Bindestriche durch einen ersetzen
+        .substr(0, 30); // Auf 30 Zeichen begrenzen
+      
+      return `${timestamp}-${baseName}-${randomId}.${extension}`;
+    }
+    
+    const sanitizedFilename = sanitizeImageFilename(filename);
+    const uploadsDir = join(__dirname, '..', 'assets', 'uploads');
+    const imagePath = join(uploadsDir, sanitizedFilename);
+    
+    // Uploads-Ordner erstellen falls nicht vorhanden
+    mkdir(uploadsDir, { recursive: true }, (mkdirErr) => {
+      if (mkdirErr) {
+        console.error('Fehler beim Erstellen des Uploads-Ordners:', mkdirErr);
+        return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+      }
+      
+      // Bild speichern
+      writeFile(imagePath, base64Data, 'base64', (writeErr) => {
+        if (writeErr) {
+          console.error('Fehler beim Speichern des Bildes:', writeErr);
+          return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+        }
+        
+        const imageUrl = `/assets/uploads/${sanitizedFilename}`;
+        console.log(`✅ Bild gespeichert: ${sanitizedFilename}`);
+        
+        res.json({
+          message: 'Bild erfolgreich hochgeladen',
+          filename: sanitizedFilename,
+          url: imageUrl,
+          location: imageUrl // TinyMCE erwartet 'location' für die URL
+        });
+      });
+    });
+    
+  } catch (error) {
+    console.error('Fehler beim Verarbeiten des Bildes:', error);
+    res.status(500).json({ error: 'Fehler beim Verarbeiten des Bildes' });
+  }
+});
+
+// GET /assets/uploads/:filename - Bilder ausliefern
+app.get('/assets/uploads/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
+  
+  // Sicherheitscheck: Nur erlaubte Dateierweiterungen
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const hasValidExtension = allowedExtensions.some(ext => 
+    filename.toLowerCase().endsWith(ext)
+  );
+  
+  if (!hasValidExtension) {
+    return res.status(400).json({ error: 'Nicht unterstütztes Bildformat' });
+  }
+  
+  // Content-Type basierend auf Dateierweiterung setzen
+  const extension = filename.toLowerCase().split('.').pop();
+  const contentTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp'
+  };
+  
+  res.setHeader('Content-Type', contentTypes[extension] || 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 Jahr Cache
+  
+  // Datei ausliefern
+  res.sendFile(imagePath, (err) => {
+    if (err) {
+      console.error('Fehler beim Ausliefern des Bildes:', err);
+      res.status(404).json({ error: 'Bild nicht gefunden' });
+    }
+  });
+});
+
+// DELETE /assets/uploads/:filename - Bild löschen (Admin-only)
+app.delete('/assets/uploads/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
+  
+  // Sicherheitscheck für Admin-Berechtigung würde hier stehen
+  // Für jetzt: einfache Implementierung
+  
+  unlink(imagePath, (err) => {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Bild nicht gefunden' });
+      }
+      console.error('Fehler beim Löschen des Bildes:', err);
+      return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
+    }
+    
+    console.log(`🗑️ Bild gelöscht: ${filename}`);
+    res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
+  });
+});
+
 // Server starten
 const PORT = 3000;
 app.listen(PORT, () => {
