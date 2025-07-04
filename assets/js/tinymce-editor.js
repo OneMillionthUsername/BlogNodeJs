@@ -1,8 +1,37 @@
 // TinyMCE Editor Konfiguration und Funktionen
 // Diese Datei enthält alle TinyMCE-spezifischen Funktionen für create.html
 
+console.log('🔧 TinyMCE Editor Modul geladen');
+
 // TinyMCE Editor initialisieren
 function initializeTinyMCE() {
+    console.log('🚀 initializeTinyMCE() aufgerufen');
+    
+    // Prüfen ob das Element existiert
+    const contentElement = document.getElementById('content');
+    if (!contentElement) {
+        console.error('❌ TinyMCE: Content-Element #content nicht gefunden');
+        return;
+    }
+    console.log('✅ Content-Element gefunden:', contentElement);
+    
+    // Prüfen ob TinyMCE verfügbar ist
+    if (typeof tinymce === 'undefined') {
+        console.error('❌ TinyMCE ist nicht verfügbar. CDN-Loading fehlgeschlagen?');
+        return;
+    }
+    console.log('✅ TinyMCE verfügbar, Version:', tinymce.majorVersion);
+    
+    // Vorherige TinyMCE Instanz entfernen falls vorhanden
+    if (tinymce.get('content')) {
+        console.log('🔄 Entferne vorherige TinyMCE Instanz');
+        tinymce.remove('#content');
+    }
+    
+    console.log('⚙️ Initialisiere TinyMCE mit vereinfachter Konfiguration...');
+    
+    // Debugger-Statement für VS Code
+    debugger; // Hier stoppt der Debugger automatisch
     tinymce.init({
         selector: '#content',
         height: 500,
@@ -430,136 +459,35 @@ function resetForm() {
 
 // Initialisierung und Event Listener
 function initializeBlogEditor() {
+    console.log('🎬 initializeBlogEditor() aufgerufen');
+    
     // TinyMCE initialisieren
+    console.log('📝 Rufe initializeTinyMCE() auf...');
     initializeTinyMCE();
     
     // Event Listener für Titel und Tags
-    document.getElementById('title').addEventListener('input', function() {
-        updatePreview();
-        saveDraft();
-    });
+    const titleElement = document.getElementById('title');
+    const tagsElement = document.getElementById('tags');
     
-    document.getElementById('tags').addEventListener('input', function() {
-        updatePreview();
-        saveDraft();
-    });
-    
-    // Auto-Save alle 30 Sekunden
-    setInterval(saveDraft, 30000);
-    
-    // Warnung beim Verlassen der Seite mit ungespeicherten Änderungen
-    window.addEventListener('beforeunload', function(e) {
-        const title = document.getElementById('title').value;
-        const content = tinymce.get('content') ? tinymce.get('content').getContent() : '';
-        
-        if (title.trim() || (content.trim() && content.trim() !== '<p></p>')) {
-            e.preventDefault();
-            e.returnValue = '';
-            return 'Sie haben ungespeicherte Änderungen. Möchten Sie wirklich die Seite verlassen?';
-        }
-    });
-    
-    // Tastenkürzel
-    document.addEventListener('keydown', function(e) {
-        // Strg+S zum Speichern des Entwurfs
-        if (e.ctrlKey && e.key === 's') {
-            e.preventDefault();
+    if (titleElement) {
+        console.log('✅ Title-Element gefunden, füge Event Listener hinzu');
+        titleElement.addEventListener('input', function() {
+            updatePreview();
             saveDraft();
-            showNotification('Entwurf gespeichert', 'success');
-        }
-        
-        // Strg+Enter zum Veröffentlichen
-        if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('blogPostForm').dispatchEvent(new Event('submit'));
-        }
-    });
-
-    // Formular-Submit
-    document.getElementById('blogPostForm').addEventListener('submit', async function(event) {
-        event.preventDefault();
-
-        const title = document.getElementById('title').value;
-        const content = tinymce.get('content').getContent();
-        const tagsInput = document.getElementById('tags').value;
-
-        if (!title.trim()) {
-            alert('Bitte gib einen Titel ein.');
-            return;
-        }
-
-        if (!content.trim() || content.trim() === '<p></p>') {
-            alert('Bitte schreibe einen Inhalt für deinen Blogpost.');
-            return;
-        }
-
-        const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-
-        const postData = {
-            title: title.trim(),
-            content: content,
-            tags: tags
-        };
-
-        const submitBtn = document.querySelector('.main-submit-btn');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<span class="btn-icon">⏳</span> Wird veröffentlicht...';
-        submitBtn.disabled = true;
-
-        try {
-            const response = await fetch('/blogpost', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(postData)
-            });
-
-            const result = await response.json();
-            const messageDiv = document.getElementById('responseMessage');
-
-            if (response.ok) {
-                messageDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <strong>🎉 Erfolgreich veröffentlicht!</strong><br>
-                        Dein Blogpost "${title}" wurde erfolgreich erstellt.
-                        <br><br>
-                        <a href="list_posts.html" class="btn btn-sm btn-outline-success">📚 Alle Posts anzeigen</a>
-                        <a href="read_post.html?post=${result.file}" class="btn btn-sm btn-outline-primary ml-2">📖 Post lesen</a>
-                    </div>
-                `;
-                
-                // Entwurf löschen nach erfolgreichem Veröffentlichen
-                clearDraft();
-                
-                // Formular zurücksetzen nach erfolgreichem Submit
-                setTimeout(() => {
-                    if (confirm('Möchtest du einen weiteren Blogpost erstellen?')) {
-                        resetForm();
-                        messageDiv.innerHTML = '';
-                    }
-                }, 2000);
-                
-            } else {
-                messageDiv.innerHTML = `
-                    <div class="alert alert-danger">
-                        <strong>❌ Fehler beim Veröffentlichen</strong><br>
-                        ${result.error || 'Unbekannter Fehler'}
-                    </div>
-                `;
-            }
-
-        } catch (error) {
-            console.error('Fehler:', error);
-            document.getElementById('responseMessage').innerHTML = `
-                <div class="alert alert-danger">
-                    <strong>❌ Netzwerkfehler</strong><br>
-                    ${error.message}
-                </div>
-            `;
-        } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        }
-    });
+        });
+    } else {
+        console.error('❌ Title-Element nicht gefunden');
+    }
+    
+    if (tagsElement) {
+        console.log('✅ Tags-Element gefunden, füge Event Listener hinzu');
+        tagsElement.addEventListener('input', function() {
+            updatePreview();
+            saveDraft();
+        });
+    } else {
+        console.error('❌ Tags-Element nicht gefunden');
+    }
+    
+    console.log('✅ Blog Editor erfolgreich initialisiert');
 }

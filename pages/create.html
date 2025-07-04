@@ -136,18 +136,28 @@
     </div>
     
     <!-- Utils Modul -->
-    <script src="../assets/js/utils.js"></script>
+    <script src="../assets/js/utils.js" defer></script>
     <!-- Admin System Modul -->
-    <script src="../assets/js/admin.js"></script>
+    <script src="../assets/js/admin.js" defer></script>
     <!-- TinyMCE Editor Modul -->
-    <script src="../assets/js/tinymce-editor.js"></script>
+    <script src="../assets/js/tinymce-editor.js" defer></script>
     
-    <script>
+    <script defer>
         // Initialisiere den Blog Editor nach dem Laden der Seite
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initialisiere Blog-Komponenten...');
+            
+            // Debug-Ausgaben für bessere Verfolgung
+            console.log('📋 Initialisiere Blog Utilities...');
             initializeBlogUtilities();
+            
+            console.log('👑 Initialisiere Admin System...');
             initializeAdminSystem();
+            
+            console.log('✍️ Initialisiere Create Page...');
             initializeCreatePage();
+            
+            console.log('✅ Alle Komponenten initialisiert');
         });
     </script>
 </body>

@@ -203,27 +203,17 @@ async function loadAndDisplayArchivePosts() {
                 <div class="archive-post-item">
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
                     <p class="post-meta">📅 ${postDate}</p>
-                    ${isAdminLoggedIn ? `
-                        <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
-                            background: #e74c3c;
-                            color: white;
-                            border: none;
-                            padding: 5px 12px;
-                            border-radius: 15px;
-                            font-size: 0.8rem;
-                            cursor: pointer;
-                            margin-top: 8px;
-                            transition: all 0.3s ease;
-                        " title="Post löschen">
-                            🗑️ Löschen
-                        </button>
-                    ` : ''}
                 </div>
             `;
         });
         html += '</div>';
         
         listContainer.innerHTML = html;
+        
+        // Admin-Delete-Buttons hinzufügen (falls verfügbar)
+        if (typeof addDeleteButtonsToPosts === 'function') {
+            setTimeout(addDeleteButtonsToPosts, 50);
+        }
         
     } catch (error) {
         console.error('Fehler beim Laden des Archivs:', error);
@@ -319,21 +309,6 @@ async function loadAndDisplayRecentPosts() {
                             <a href="read_post.html?post=${post.filename}" class="read-more-btn">
                                 📖 Weiterlesen
                             </a>
-                            ${isAdminLoggedIn ? `
-                                <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
-                                    background: #e74c3c;
-                                    color: white;
-                                    border: none;
-                                    padding: 8px 15px;
-                                    border-radius: 20px;
-                                    margin-left: 10px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                    transition: all 0.3s ease;
-                                " title="Post löschen">
-                                    🗑️ Löschen
-                                </button>
-                            ` : ''}
                         </div>
                     </div>
                 </article>
@@ -342,6 +317,11 @@ async function loadAndDisplayRecentPosts() {
         
         html += '</div>';
         listContainer.innerHTML = html;
+        
+        // Admin-Delete-Buttons hinzufügen (falls verfügbar)
+        if (typeof addDeleteButtonsToPosts === 'function') {
+            setTimeout(addDeleteButtonsToPosts, 50);
+        }
         
     } catch (error) {
         console.error('Fehler beim Laden der Blogposts:', error);
@@ -384,27 +364,17 @@ async function loadAndDisplayMostReadPosts() {
                     <span class="rank">#${rank}</span>
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
                     <p>👀 ${post.views} Aufrufe | 📅 ${postDate}</p>
-                    ${isAdminLoggedIn ? `
-                        <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
-                            background: #e74c3c;
-                            color: white;
-                            border: none;
-                            padding: 5px 12px;
-                            border-radius: 15px;
-                            font-size: 0.8rem;
-                            cursor: pointer;
-                            margin-top: 8px;
-                            transition: all 0.3s ease;
-                        " title="Post löschen">
-                            🗑️ Löschen
-                        </button>
-                    ` : ''}
                 </div>
             `;
         });
         html += '</div>';
         
         listContainer.innerHTML = html;
+        
+        // Admin-Delete-Buttons hinzufügen (falls verfügbar)
+        if (typeof addDeleteButtonsToPosts === 'function') {
+            setTimeout(addDeleteButtonsToPosts, 50);
+        }
         
     } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
