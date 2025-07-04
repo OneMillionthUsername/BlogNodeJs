@@ -3,8 +3,85 @@
 
 console.log('🔧 TinyMCE Editor Modul geladen');
 
+// TinyMCE API-Schlüssel Konfiguration
+const TINYMCE_CONFIG = {
+    apiKey: '', // Wird vom Admin gesetzt
+    defaultKey: 'no-api-key' // Fallback für Development
+};
+
+// TinyMCE API-Schlüssel laden
+function loadTinyMceApiKey() {
+    const savedKey = localStorage.getItem('tinymce_api_key');
+    if (savedKey) {
+        TINYMCE_CONFIG.apiKey = savedKey;
+        console.log('✅ TinyMCE API-Schlüssel aus localStorage geladen');
+    } else {
+        console.log('⚠️ Kein TinyMCE API-Schlüssel gesetzt - verwende Development-Modus');
+    }
+}
+
+// TinyMCE API-Schlüssel speichern
+function saveTinyMceApiKey(apiKey) {
+    localStorage.setItem('tinymce_api_key', apiKey);
+    TINYMCE_CONFIG.apiKey = apiKey;
+    console.log('💾 TinyMCE API-Schlüssel gespeichert');
+}
+
+// TinyMCE API-Schlüssel Setup-Dialog
+function showTinyMceApiKeySetup() {
+    const currentKey = TINYMCE_CONFIG.apiKey;
+    const message = 
+        `TinyMCE API-Schlüssel Setup:\n\n` +
+        `1. Gehe zu: https://www.tiny.cloud/\n` +
+        `2. Registriere dich (kostenlos für den Basis-Plan)\n` +
+        `3. Kopiere deinen API-Schlüssel\n` +
+        `4. Füge ihn hier ein\n\n` +
+        `Aktueller Schlüssel: ${currentKey ? 'Gesetzt ✅' : 'Nicht gesetzt ❌'}\n\n` +
+        `Neuen API-Schlüssel eingeben:`;
+    
+    const newKey = prompt(message, currentKey || '');
+    if (newKey && newKey.trim()) {
+        saveTinyMceApiKey(newKey.trim());
+        alert('TinyMCE API-Schlüssel wurde gespeichert!\nBitte laden Sie die Seite neu.');
+        return true;
+    }
+    return false;
+}
+
+// TinyMCE dynamisch laden
+async function loadTinyMceScript() {
+    // Prüfen ob TinyMCE bereits geladen ist
+    if (typeof tinymce !== 'undefined') {
+        console.log('✅ TinyMCE bereits geladen');
+        return true;
+    }
+    
+    const apiKey = TINYMCE_CONFIG.apiKey || TINYMCE_CONFIG.defaultKey;
+    const scriptUrl = `https://cdn.tiny.cloud/1/${apiKey}/tinymce/6/tinymce.min.js`;
+    
+    console.log('📥 Lade TinyMCE Script:', scriptUrl);
+    
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = scriptUrl;
+        script.referrerPolicy = 'origin';
+        
+        script.onload = () => {
+            console.log('✅ TinyMCE Script erfolgreich geladen');
+            resolve(true);
+        };
+        
+        script.onerror = () => {
+            console.error('❌ Fehler beim Laden des TinyMCE Scripts');
+            reject(false);
+        };
+        
+        document.head.appendChild(script);
+    });
+}
+
 // TinyMCE Editor initialisieren
-function initializeTinyMCE() {
+async function initializeTinyMCE() {
     console.log('🚀 initializeTinyMCE() aufgerufen');
     
     // Prüfen ob das Element existiert
@@ -15,11 +92,28 @@ function initializeTinyMCE() {
     }
     console.log('✅ Content-Element gefunden:', contentElement);
     
-    // Prüfen ob TinyMCE verfügbar ist
+    // TinyMCE Script laden falls noch nicht verfügbar
     if (typeof tinymce === 'undefined') {
-        console.error('❌ TinyMCE ist nicht verfügbar. CDN-Loading fehlgeschlagen?');
-        return;
+        console.log('📥 TinyMCE nicht verfügbar - lade Script...');
+        try {
+            await loadTinyMceScript();
+        } catch (error) {
+            console.error('❌ TinyMCE Script konnte nicht geladen werden:', error);
+            
+            // Fallback: API-Schlüssel Setup anbieten
+            const setupNow = confirm(
+                'TinyMCE konnte nicht geladen werden.\n\n' +
+                'Möglicherweise ist kein gültiger API-Schlüssel gesetzt.\n\n' +
+                'Möchten Sie jetzt den API-Schlüssel konfigurieren?'
+            );
+            
+            if (setupNow) {
+                showTinyMceApiKeySetup();
+            }
+            return;
+        }
     }
+    
     console.log('✅ TinyMCE verfügbar, Version:', tinymce.majorVersion);
     
     // Vorherige TinyMCE Instanz entfernen falls vorhanden
@@ -622,12 +716,15 @@ function showImageGallery() {
 }
 
 // Initialisierung und Event Listener
-function initializeBlogEditor() {
+async function initializeBlogEditor() {
     console.log('🎬 initializeBlogEditor() aufgerufen');
+    
+    // API-Schlüssel laden
+    loadTinyMceApiKey();
     
     // TinyMCE initialisieren
     console.log('📝 Rufe initializeTinyMCE() auf...');
-    initializeTinyMCE();
+    await initializeTinyMCE();
     
     // Event Listener für Titel und Tags
     const titleElement = document.getElementById('title');
@@ -655,3 +752,6 @@ function initializeBlogEditor() {
     
     console.log('✅ Blog Editor erfolgreich initialisiert');
 }
+
+// Globale Funktionen für TinyMCE Setup verfügbar machen
+window.showTinyMceApiKeySetup = showTinyMceApiKeySetup;

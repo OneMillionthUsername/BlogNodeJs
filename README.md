@@ -233,7 +233,7 @@ Blog/
 
 ### Admin-Anmeldung:
 1. Klicke auf "Admin" in der Navigation (jede Seite)
-2. Gib das Admin-Passwort ein (Standard: "admin123")
+2. Gib das Admin-Passwort ein (Standard: "admin123" - **SOFORT ÄNDERN!**)
 3. Admin-Toolbar erscheint mit Logout-Option
 4. Create-Seite und Delete-Buttons werden verfügbar
 
@@ -242,11 +242,13 @@ Blog/
 - **Post-Löschung:** Delete-Buttons erscheinen nur für angemeldete Admins
 - **Content-Management:** Vollständige CRUD-Operationen für alle Posts
 - **Sichere Abmeldung:** Logout entfernt alle Admin-Berechtigungen
+- **Passwort-Management:** Automatische Warnung beim ersten Login
 
-### Sicherheitshinweise:
-- Passwort in `admin.js` für Produktionsumgebung ändern
-- HTTPS in Produktion verwenden
-- Erweiterte Authentifizierung für öffentliche Deployments empfohlen
+### 🔐 Sicherheitsverbesserungen (NEU):
+- **SHA-256 Hash-Passwörter:** Kein Klartext mehr im Code
+- **Automatisches Setup:** Warnung bei Standard-Passwort
+- **Sichere Speicherung:** Nur gehashte Passwörter in localStorage
+- **API-Schlüssel-Sicherheit:** Keine hardcodierten Schlüssel
 
 ## Debugging & Development
 
@@ -498,3 +500,32 @@ Dieses Projekt steht unter der ISC-Lizenz. Es ist frei verfügbar für Bildungs-
 - **Error-Handling:** Robuste Fehlerbehandlung mit aussagekräftigen Meldungen
 
 **Entwickelt mit ❤️ für tiefgehende Gedanken und moderne Webtechnologien.**
+
+## 🔐 Sicherheit
+
+### API-Schlüssel-Sicherheit
+- **Google Gemini API**: ✅ Sicher - Nur lokale Browser-Speicherung
+- **TinyMCE API**: ✅ Sicher - Öffentlicher Editor-Schlüssel
+- **Keine hardcodierten Secrets**: ✅ Alle sensiblen Daten benutzergesteuert
+
+### Admin-Sicherheit (NEU)
+- **SHA-256 Hash-Passwörter**: ✅ Kein Klartext im Code
+- **Automatisches Setup**: ✅ Warnung bei unsicherem Standard-Passwort
+- **Session-Management**: 24h Ablaufzeit mit sicherer Token-Speicherung
+- **Browser-only Authentifizierung**: Keine Server-side Session-Speicherung
+
+### Content-Sicherheit
+- **Input-Sanitization**: Server- und Client-seitige Bereinigung
+- **XSS-Schutz**: Content Security Policy Headers
+- **Path-Traversal-Schutz**: Sichere Dateinamen-Validierung
+- **File-Upload-Sicherheit**: Typ- und Größen-Validierung
+
+### Erste Schritte nach Installation:
+1. **Admin-Passwort ändern**: Beim ersten Login werden Sie automatisch gewarnt
+2. **Gemini API-Schlüssel**: Über den "AI Setup" Button in der Editor-Toolbar eingeben
+3. **HTTPS verwenden**: In Produktionsumgebungen unbedingt SSL aktivieren
+
+### Detaillierte Sicherheitsinformationen:
+Siehe `SECURITY.md` für vollständige Sicherheitsrichtlinien und Deployment-Empfehlungen.
+
+---
