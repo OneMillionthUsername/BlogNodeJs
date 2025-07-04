@@ -37,42 +37,12 @@
         </div>
     </div>
 
+    <!-- Utils Modul -->
+    <script src="../assets/js/utils.js"></script>
+    
     <script>
-        async function loadMostReadPosts() {
-            try {
-                const response = await fetch('/most-read');
-                const posts = await response.json();
-                
-                const listContainer = document.getElementById('mostReadPosts');
-                
-                if (posts.length === 0) {
-                    listContainer.innerHTML = '<p>Keine Posts vorhanden.</p>';
-                    return;
-                }
-
-                let html = '<div class="most-read-list">';
-                posts.forEach((post, index) => {
-                    const rank = index + 1;
-                    const postDate = new Date(post.date).toLocaleDateString('de-DE');
-                    html += `
-                        <div class="most-read-item">
-                            <span class="rank">#${rank}</span>
-                            <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
-                            <p>👀 ${post.views} Aufrufe | 📅 ${postDate}</p>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                
-                listContainer.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Fehler beim Laden der Statistiken:', error);
-                document.getElementById('mostReadPosts').innerHTML = '<p>Fehler beim Laden der Statistiken.</p>';
-            }
-        }
-
-        window.addEventListener('load', loadMostReadPosts);
+        // Initialisiere die Most Read Posts nach dem Laden der Seite
+        window.addEventListener('load', loadAndDisplayMostReadPosts);
     </script>
 </body>
 </html>

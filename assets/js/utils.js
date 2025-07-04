@@ -317,6 +317,54 @@ async function loadAndDisplayRecentPosts() {
     }
 }
 
+// Funktion zum Laden und Anzeigen der meistgelesenen Posts (für most_read.html)
+async function loadAndDisplayMostReadPosts() {
+    try {
+        const response = await fetch('/most-read');
+        const posts = await response.json();
+        
+        const listContainer = document.getElementById('mostReadPosts');
+        
+        if (posts.length === 0) {
+            listContainer.innerHTML = `
+                <div class="no-posts">
+                    <div class="no-posts-icon">📊</div>
+                    <h3>Keine Statistiken vorhanden</h3>
+                    <p>Es sind noch keine Aufrufe von Blogposts vorhanden.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="most-read-list">';
+        posts.forEach((post, index) => {
+            const rank = index + 1;
+            const postDate = new Date(post.date).toLocaleDateString('de-DE');
+            html += `
+                <div class="most-read-item">
+                    <span class="rank">#${rank}</span>
+                    <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
+                    <p>👀 ${post.views} Aufrufe | 📅 ${postDate}</p>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        listContainer.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Fehler beim Laden der Statistiken:', error);
+        document.getElementById('mostReadPosts').innerHTML = `
+            <div class="error-message">
+                <div class="error-icon">❌</div>
+                <h3>Fehler beim Laden</h3>
+                <p>Die Statistiken konnten nicht geladen werden.</p>
+                <button onclick="loadAndDisplayMostReadPosts()" class="btn btn-outline-primary mt-3">🔄 Erneut versuchen</button>
+            </div>
+        `;
+    }
+}
+
 // Utility-Funktion zum Abrufen von URL-Parametern
 function getUrlParameter(paramName) {
     const urlParams = new URLSearchParams(window.location.search);
