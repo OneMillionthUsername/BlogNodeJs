@@ -25,9 +25,16 @@ function checkAdminStatus() {
 }
 
 // Admin Login
-function adminLogin() {
+async function adminLogin() {
     const password = prompt('Admin-Passwort eingeben:');
-    if (password === 'admin123') { // Einfaches Passwort - in Produktion sollte das sicherer sein
+    
+    // Hash des Passworts zur Sicherheit (SHA-256)
+    // Standard-Passwort: "admin123" -> Hash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+    // Ändern Sie diesen Hash für Ihr eigenes Passwort!
+    const expectedHash = localStorage.getItem('blog_admin_password_hash') || 
+                        '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
+    
+    if (password && await hashPassword(password) === expectedHash) {
         // Token für 24 Stunden setzen
         const expiryTime = Date.now() + (24 * 60 * 60 * 1000);
         localStorage.setItem('blog_admin_token', 'admin_logged_in');
@@ -216,9 +223,12 @@ function initializeCreatePage() {
 }
 
 // Admin Login speziell für Create-Seite (mit Reload)
-function adminLoginForCreatePage() {
+async function adminLoginForCreatePage() {
     const password = prompt('Admin-Passwort eingeben:');
-    if (password === 'admin123') {
+    const expectedHash = localStorage.getItem('blog_admin_password_hash') || 
+                        '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
+    
+    if (password && await hashPassword(password) === expectedHash) {
         const expiryTime = Date.now() + (24 * 60 * 60 * 1000);
         localStorage.setItem('blog_admin_token', 'admin_logged_in');
         localStorage.setItem('blog_admin_expiry', expiryTime.toString());
@@ -267,10 +277,54 @@ async function deletePostAndRedirect(filename) {
     }
 }
 
+// Passwort-Hash-Funktion (SHA-256)
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Passwort-Setup für Admin (erste Verwendung)
+async function setupAdminPassword() {
+    const currentHash = localStorage.getItem('blog_admin_password_hash');
+    if (currentHash && currentHash !== '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9') {
+        // Bereits eigenes Passwort gesetzt
+        return;
+    }
+    
+    const answer = confirm(
+        'Sie verwenden noch das Standard-Passwort "admin123".\n\n' +
+        'Möchten Sie jetzt ein sicheres Admin-Passwort festlegen?\n\n' +
+        'Empfohlen für die Sicherheit Ihres Blogs!'
+    );
+    
+    if (answer) {
+        const newPassword = prompt(
+            'Neues Admin-Passwort eingeben:\n' +
+            '(Mindestens 8 Zeichen, speichern Sie es sicher!)'
+        );
+        
+        if (newPassword && newPassword.length >= 8) {
+            const hash = await hashPassword(newPassword);
+            localStorage.setItem('blog_admin_password_hash', hash);
+            alert('Neues Admin-Passwort wurde gesetzt!\nDas Standard-Passwort funktioniert nicht mehr.');
+        } else if (newPassword) {
+            alert('Passwort muss mindestens 8 Zeichen lang sein!');
+            setupAdminPassword(); // Nochmal versuchen
+        }
+    }
+}
+
 // Admin-System initialisieren
-function initializeAdminSystem() {
+async function initializeAdminSystem() {
     checkAdminStatus();
     updateNavigationVisibility();
+    
+    // Setup-Warnung für Standard-Passwort anzeigen
+    await setupAdminPassword();
+    
     if (isAdminLoggedIn) {
         createAdminToolbar();
         // Kommentare mit Admin-Funktionen neu laden falls sie bereits angezeigt werden

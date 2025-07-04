@@ -146,3 +146,19 @@ posts/test-*.json
 
 # Hochgeladene Bilder (optional, je nach Deployment-Strategie)
 # assets/uploads/
+
+# Sicherheits-Konfigurationsdateien mit sensiblen Daten
+# Behalten Sie SECURITY.md, aber schließen Sie lokale Konfigurationen aus
+config.local.js
+secrets.json
+.secrets
+admin-config.local.js
+
+# API-Schlüssel Backup-Dateien (falls erstellt)
+api-keys.backup
+*.key
+*.secret
+
+# Sicherheitsberichte mit möglicherweise sensiblen Informationen
+# (Entfernen Sie diese Zeile wenn Sie Reports committen möchten)
+# API_SECURITY_REPORT.md
