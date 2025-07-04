@@ -1,5 +1,5 @@
 ﻿import express, { json } from 'express';
-import { mkdir, writeFile, readFile, readdir } from 'fs';
+import { mkdir, writeFile, readFile, readdir, unlink } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -191,6 +191,34 @@ app.get('/most-read', (req, res) => {
           res.json(blogPosts);
         }
       });
+    });
+  });
+});
+
+// DELETE /blogpost/:filename - Blogpost löschen
+app.delete('/blogpost/:filename', (req, res) => {
+  const fileName = req.params.filename;
+  const filePath = join(__dirname, '..', 'posts', fileName);
+
+  // Prüfen ob Datei existiert
+  readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Fehler beim Lesen der Datei:', err);
+      return res.status(404).json({ error: 'Blogpost nicht gefunden' });
+    }
+
+    // Datei löschen
+    unlink(filePath, (unlinkErr) => {
+      if (unlinkErr) {
+        console.error('Fehler beim Löschen der Datei:', unlinkErr);
+        return res.status(500).json({ error: 'Fehler beim Löschen des Blogposts' });
+      }
+
+      // View-Count auch entfernen
+      delete postViews[fileName];
+
+      console.log(`Blogpost gelöscht: ${fileName}`);
+      res.json({ message: 'Blogpost erfolgreich gelöscht', file: fileName });
     });
   });
 });

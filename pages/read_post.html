@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/utils.js"></script>
+    <script src="../assets/js/admin.js"></script>
     <title>Blogpost - Sub specie aeternitatis</title>
 </head>
 <body>
@@ -48,13 +49,62 @@
         <div class="navigation text-center mt-4">
             <a href="list_posts.html" class="btn btn-outline-primary">📚 Alle Blogposts</a>
             <a href="../index.html" class="btn btn-outline-secondary ml-2">🏠 Zur Startseite</a>
-            <a href="create.html" class="btn btn-outline-success ml-2">✍️ Neuen Post erstellen</a>
+            <a href="create.html" class="btn btn-outline-success ml-2" id="create-link" style="display: none;">✍️ Neuen Post erstellen</a>
+            <div id="admin-controls" style="margin-top: 15px;"></div>
         </div>
     </div>
 
     <script>
         // Blogpost laden wenn die Seite geladen wird
-        window.addEventListener('load', loadAndDisplayBlogPost);
+        window.addEventListener('load', function() {
+            initializeBlogUtilities();
+            initializeAdminSystem();
+            loadAndDisplayBlogPost();
+        });
+        
+        // Admin-Controls für read_post.html hinzufügen
+        function addReadPostAdminControls() {
+            if (!checkAdminStatus()) return;
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const postFilename = urlParams.get('post');
+            
+            if (postFilename) {
+                const adminControls = document.getElementById('admin-controls');
+                if (adminControls) {
+                    adminControls.innerHTML = `
+                        <button onclick="deletePostAndRedirect('${postFilename}')" class="btn btn-danger" style="
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 25px;
+                            cursor: pointer;
+                            font-weight: 500;
+                            margin-top: 10px;
+                        ">
+                            🗑️ Diesen Post löschen
+                        </button>
+                    `;
+                }
+            }
+        }
+        
+        // Post löschen und zur Post-Liste weiterleiten
+        async function deletePostAndRedirect(filename) {
+            const deleted = await deletePost(filename);
+            if (deleted) {
+                // Nach dem Löschen zur Post-Liste weiterleiten
+                window.location.href = 'list_posts.html';
+            }
+        }
+        
+        // Admin-Controls nach dem Laden des Posts hinzufügen
+        const originalUpdateBlogPostUI = updateBlogPostUI;
+        updateBlogPostUI = function(post) {
+            originalUpdateBlogPostUI(post);
+            setTimeout(addReadPostAdminControls, 100);
+        };
     </script>
 </body>
 </html>

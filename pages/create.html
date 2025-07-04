@@ -22,7 +22,21 @@
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-md-10">
-                <div class="content-area">
+                <!-- Admin-Schutz: Inhalt wird nur für Admins angezeigt -->
+                <div id="admin-required" class="content-area" style="display: none;">
+                    <div class="alert alert-warning text-center">
+                        <h4>🔒 Zugriff verweigert</h4>
+                        <p>Sie müssen sich als Administrator anmelden, um Blogposts erstellen zu können.</p>
+                        <button onclick="adminLoginForCreatePage()" class="btn btn-primary">
+                            👑 Als Admin anmelden
+                        </button>
+                        <a href="../index.html" class="btn btn-outline-secondary ml-2">
+                            🏠 Zur Startseite
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="create-content" class="content-area" style="display: none;">
                     <form id="blogPostForm" class="create-form">
                         <div class="form-group">
                             <label for="title" class="form-label">
@@ -111,7 +125,7 @@
                     </form>
                     
                     <div id="responseMessage" class="response-message"></div>
-                </div>
+                </div> <!-- End create-content -->
             </div>
         </div>
         
@@ -121,13 +135,19 @@
         </div>
     </div>
     
+    <!-- Utils Modul -->
+    <script src="../assets/js/utils.js"></script>
+    <!-- Admin System Modul -->
+    <script src="../assets/js/admin.js"></script>
     <!-- TinyMCE Editor Modul -->
     <script src="../assets/js/tinymce-editor.js"></script>
     
     <script>
         // Initialisiere den Blog Editor nach dem Laden der Seite
         document.addEventListener('DOMContentLoaded', function() {
-            initializeBlogEditor();
+            initializeBlogUtilities();
+            initializeAdminSystem();
+            initializeCreatePage();
         });
     </script>
 </body>

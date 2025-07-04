@@ -1,4 +1,12 @@
-document.getElementById('blogPostForm').addEventListener('submit', async function(event) {
+// Blog Utility Funktionen
+// Alle allgemeinen Blog-Funktionen sind hier zentralisiert
+
+// Blog Post Form Handler (wird nur ausgeführt wenn das Element existiert)
+function initializeBlogPostForm() {
+    const form = document.getElementById('blogPostForm');
+    if (!form) return; // Element existiert nicht auf dieser Seite
+    
+    form.addEventListener('submit', async function(event) {
         event.preventDefault(); // Verhindert das Standard-Formular-Senden
 
         const title = document.getElementById('title').value;
@@ -39,6 +47,7 @@ document.getElementById('blogPostForm').addEventListener('submit', async functio
             document.getElementById('responseMessage').textContent = `Fehler: ${error.message}`;
         }
     });
+}
 
 // Funktion zum Laden aller Blogposts
 async function loadAllBlogPosts() {
@@ -194,6 +203,21 @@ async function loadAndDisplayArchivePosts() {
                 <div class="archive-post-item">
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
                     <p class="post-meta">📅 ${postDate}</p>
+                    ${isAdminLoggedIn ? `
+                        <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            padding: 5px 12px;
+                            border-radius: 15px;
+                            font-size: 0.8rem;
+                            cursor: pointer;
+                            margin-top: 8px;
+                            transition: all 0.3s ease;
+                        " title="Post löschen">
+                            🗑️ Löschen
+                        </button>
+                    ` : ''}
                 </div>
             `;
         });
@@ -295,6 +319,21 @@ async function loadAndDisplayRecentPosts() {
                             <a href="read_post.html?post=${post.filename}" class="read-more-btn">
                                 📖 Weiterlesen
                             </a>
+                            ${isAdminLoggedIn ? `
+                                <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
+                                    background: #e74c3c;
+                                    color: white;
+                                    border: none;
+                                    padding: 8px 15px;
+                                    border-radius: 20px;
+                                    margin-left: 10px;
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                    transition: all 0.3s ease;
+                                " title="Post löschen">
+                                    🗑️ Löschen
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 </article>
@@ -345,6 +384,21 @@ async function loadAndDisplayMostReadPosts() {
                     <span class="rank">#${rank}</span>
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
                     <p>👀 ${post.views} Aufrufe | 📅 ${postDate}</p>
+                    ${isAdminLoggedIn ? `
+                        <button onclick="deletePost('${post.filename}')" class="delete-btn" style="
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            padding: 5px 12px;
+                            border-radius: 15px;
+                            font-size: 0.8rem;
+                            cursor: pointer;
+                            margin-top: 8px;
+                            transition: all 0.3s ease;
+                        " title="Post löschen">
+                            🗑️ Löschen
+                        </button>
+                    ` : ''}
                 </div>
             `;
         });
@@ -363,6 +417,12 @@ async function loadAndDisplayMostReadPosts() {
             </div>
         `;
     }
+}
+
+// Blog Utilities initialisieren
+function initializeBlogUtilities() {
+    // Blog Post Form initialisieren (falls vorhanden)
+    initializeBlogPostForm();
 }
 
 // Utility-Funktion zum Abrufen von URL-Parametern

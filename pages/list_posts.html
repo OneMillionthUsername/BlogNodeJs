@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/js/utils.js"></script>
+    <script src="../assets/js/admin.js"></script>
     <title>Alle Blogposts - Sub specie aeternitatis</title>
 </head>
 <body>
@@ -42,14 +43,18 @@
         
         <div class="navigation text-center mt-4">
             <a href="../index.html" class="btn btn-outline-primary">🏠 Zur Startseite</a>
-            <a href="create.html" class="btn btn-outline-success ml-2">✍️ Neuen Blogpost erstellen</a>
+            <a href="create.html" class="btn btn-outline-success ml-2" id="create-link" style="display: none;">✍️ Neuen Blogpost erstellen</a>
             <a href="archiv.html" class="btn btn-outline-secondary ml-2">🗂️ Archiv</a>
         </div>
     </div>
 
     <script>
         // Initialisiere die Recent Posts nach dem Laden der Seite
-        window.addEventListener('load', loadAndDisplayRecentPosts);
+        window.addEventListener('load', function() {
+            initializeBlogUtilities();
+            initializeAdminSystem();
+            loadAndDisplayRecentPosts();
+        });
     </script>
 </body>
 </html>

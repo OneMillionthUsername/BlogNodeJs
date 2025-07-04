@@ -39,10 +39,16 @@
 
     <!-- Utils Modul -->
     <script src="../assets/js/utils.js"></script>
+    <!-- Admin System Modul -->
+    <script src="../assets/js/admin.js"></script>
     
     <script>
         // Initialisiere das Archiv nach dem Laden der Seite
-        window.addEventListener('load', loadAndDisplayArchivePosts);
+        window.addEventListener('load', function() {
+            initializeBlogUtilities();
+            initializeAdminSystem();
+            loadAndDisplayArchivePosts();
+        });
     </script>
 </body>
 </html>

@@ -39,10 +39,16 @@
 
     <!-- Utils Modul -->
     <script src="../assets/js/utils.js"></script>
+    <!-- Admin System Modul -->
+    <script src="../assets/js/admin.js"></script>
     
     <script>
         // Initialisiere die Most Read Posts nach dem Laden der Seite
-        window.addEventListener('load', loadAndDisplayMostReadPosts);
+        window.addEventListener('load', function() {
+            initializeBlogUtilities();
+            initializeAdminSystem();
+            loadAndDisplayMostReadPosts();
+        });
     </script>
 </body>
 </html>
