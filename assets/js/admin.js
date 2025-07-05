@@ -1,60 +1,138 @@
-// Admin-System für den Blog
+// Admin-System für den Blog - JWT-basierte Authentifizierung
 // Alle admin-bezogenen Funktionen sind hier zentralisiert
 
 // Admin-Status Variable (muss vor allen Funktionen stehen)
 let isAdminLoggedIn = false;
+let currentJwtToken = null;
+let currentUser = null;
 
-// Admin Login prüfen (einfaches System mit localStorage)
-function checkAdminStatus() {
-    const adminToken = localStorage.getItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_TOKEN);
-    const adminExpiry = localStorage.getItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_EXPIRY);
-    
-    if (adminToken === 'admin_logged_in' && adminExpiry) {
-        const expiryTime = parseInt(adminExpiry);
-        if (Date.now() < expiryTime) {
-            isAdminLoggedIn = true;
-            return true;
-        } else {
-            // Token abgelaufen
-            clearAdminToken();
+// JWT-Token aus Cookie lesen (Fallback-Methode)
+function getTokenFromCookie() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'authToken') {
+            return value;
         }
     }
+    return null;
+}
+
+// API-Request mit JWT-Authorization Header
+async function makeApiRequestWithAuth(url, options = {}) {
+    const token = currentJwtToken || getTokenFromCookie();
+    
+    if (token) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+    }
+    
+    return await makeApiRequest(url, options);
+}
+
+// Admin-Status über JWT-Token prüfen
+async function checkAdminStatus() {
+    try {
+        const result = await makeApiRequest('/auth/verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (result.success && result.data && result.data.valid) {
+            isAdminLoggedIn = true;
+            currentUser = result.data.user;
+            currentJwtToken = getTokenFromCookie(); // Token aus Cookie lesen
+            console.log('✅ Admin-Session aktiv:', currentUser.username);
+            return true;
+        }
+    } catch (error) {
+        console.warn('⚠️ Admin-Status-Prüfung fehlgeschlagen:', error);
+    }
+    
     isAdminLoggedIn = false;
+    currentUser = null;
+    currentJwtToken = null;
     return false;
 }
 
-// Admin Login (vereinheitlicht für alle Seiten)
+// JWT-basiertes Admin Login
 async function adminLogin(reloadPage = true) {
+    const username = prompt('Benutzername:') || 'admin';
     const password = prompt('Admin-Passwort eingeben:');
     
-    // Hash des Passworts zur Sicherheit (SHA-256)
-    // Standard-Passwort: "admin123" -> Hash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
-    // Ändern Sie diesen Hash für Ihr eigenes Passwort!
-    const expectedHash = localStorage.getItem(ADMIN_CONFIG.STORAGE_KEYS.PASSWORD_HASH) || 
-                        ADMIN_CONFIG.DEFAULT_PASSWORD_HASH;
+    if (!password) {
+        return false;
+    }
     
-    if (password && await hashPassword(password) === expectedHash) {
-        setAdminToken();
-        updateNavigationVisibility();
+    console.log('🔑 Versuche Login mit:', username); // Debug-Ausgabe
+    
+    try {
+        const result = await makeApiRequest('/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password
+            })
+        });
         
-        if (reloadPage) {
-            reloadPageWithDelay(); // Verzögerter Reload für bessere UX
+        console.log('📥 Login-Antwort:', result); // Debug-Ausgabe
+        
+        if (result.success && result.data && result.data.success) {
+            isAdminLoggedIn = true;
+            currentUser = result.data.user;
+            currentJwtToken = result.data.token; // Token aus Response speichern
+            
+            console.log('✅ Admin-Login erfolgreich:', currentUser.username);
+            updateNavigationVisibility();
+            
+            if (reloadPage) {
+                reloadPageWithDelay(); // Verzögerter Reload für bessere UX
+            }
+            return true;
+        } else {
+            const errorMsg = result.data ? result.data.error : 'Login fehlgeschlagen';
+            console.error('❌ Login fehlgeschlagen:', errorMsg); // Debug-Ausgabe
+            alert('Login fehlgeschlagen: ' + errorMsg);
+            return false;
         }
-        return true;
-    } else {
-        alert(ADMIN_MESSAGES.login.failed);
+    } catch (error) {
+        console.error('❌ Login-Fehler:', error);
+        alert('Login fehlgeschlagen: Netzwerkfehler');
         return false;
     }
 }
 
-// Admin Logout
-function adminLogout() {
-    clearAdminToken();
+// JWT-basiertes Admin Logout
+async function adminLogout() {
+    try {
+        await makeApiRequest('/auth/logout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    } catch (error) {
+        console.warn('⚠️ Logout-Request fehlgeschlagen:', error);
+    }
+    
+    // Lokale Variablen zurücksetzen
+    isAdminLoggedIn = false;
+    currentUser = null;
+    currentJwtToken = null;
+    
     updateNavigationVisibility();
     reloadPageWithDelay(); // Verzögerter Reload für bessere UX
 }
 
-// Post löschen
+// Post löschen mit JWT-Authentifizierung
 async function deletePost(filename) {
     if (!isAdminLoggedIn) {
         alert(ADMIN_MESSAGES.login.required);
@@ -65,7 +143,7 @@ async function deletePost(filename) {
         return false;
     }
     
-    const result = await makeApiRequest(`/blogpost/${filename}`, {
+    const result = await makeApiRequestWithAuth(`/blogpost/${filename}`, {
         method: 'DELETE'
     });
     
@@ -76,6 +154,14 @@ async function deletePost(filename) {
         return true;
     } else {
         const errorMsg = result.error || (result.data && result.data.error) || 'Unbekannter Fehler';
+        
+        // Bei 401/403 - Session abgelaufen
+        if (result.status === 401 || result.status === 403) {
+            alert('Session abgelaufen. Bitte melden Sie sich erneut an.');
+            await adminLogout();
+            return false;
+        }
+        
         if (result.status === 0) {
             alert(ADMIN_MESSAGES.posts.networkError);
         } else {
@@ -104,20 +190,31 @@ function updateNavigationVisibility() {
     if (publicNavigation) {
         publicNavigation.style.display = isAdminLoggedIn ? 'none' : 'block';
     }
+    
+    // Admin-Toolbar und Login-Button entsprechend ein-/ausblenden
+    if (isAdminLoggedIn) {
+        createAdminToolbar();
+        hideElement('admin-login-btn');
+    } else {
+        hideElement('admin-toolbar');
+        createAdminLoginButton();
+    }
 }
 
 // Admin-Toolbar erstellen
 function createAdminToolbar() {
-    if (!checkAdminStatus()) return;
+    if (!isAdminLoggedIn) return;
     
     // Prüfen ob Toolbar bereits existiert
     if (elementExists('admin-toolbar')) return;
+    
+    const userDisplay = currentUser ? ` (${currentUser.username})` : '';
     
     const toolbar = createElement('div', {
         id: 'admin-toolbar',
         cssText: ADMIN_STYLES.toolbar
     }, `
-        <span>👑 Admin-Modus aktiv</span>
+        <span>👑 Admin-Modus aktiv${userDisplay}</span>
         <button onclick="adminLogout()" style="${ADMIN_STYLES.logoutButton}">
             Logout
         </button>
@@ -131,7 +228,7 @@ function createAdminToolbar() {
 
 // Admin Login Button erstellen
 function createAdminLoginButton() {
-    if (checkAdminStatus()) return; // Bereits eingeloggt
+    if (isAdminLoggedIn) return; // Bereits eingeloggt
     
     // Prüfen ob Button bereits existiert
     if (elementExists('admin-login-btn')) return;
@@ -139,7 +236,7 @@ function createAdminLoginButton() {
     const loginBtn = createElement('button', {
         id: 'admin-login-btn',
         cssText: ADMIN_STYLES.loginButton,
-        title: 'Admin Login'
+        title: 'Admin Login (JWT)'
     }, '👑');
     
     // Event-Listener hinzufügen
@@ -161,27 +258,25 @@ function addHoverEffects(element, scaleUp = 1.1, scaleDown = 1) {
 }
 
 // Create Page Admin Protection und Initialisierung
-function initializeCreatePage() {
+async function initializeCreatePage() {
     // Prüfe Admin-Status und zeige entsprechenden Inhalt
-    if (checkAdminStatus()) {
+    if (await checkAdminStatus()) {
         // Admin ist eingeloggt - zeige Create-Formular
         showElement('create-content');
-        // Initialisiere TinyMCE Editor (falls die Funktion verfügbar ist)
-        if (typeof initializeBlogEditor === 'function') {
-            initializeBlogEditor();
-        }
+        console.log('✅ Admin-Status bestätigt - Create-Formular wird angezeigt');
     } else {
         // Kein Admin - zeige Warnung
         showElement('admin-required');
+        console.log('⚠️ Kein Admin-Status - Anmeldung erforderlich');
     }
     
     // Navigation-Sichtbarkeit aktualisieren
     updateNavigationVisibility();
 }
 
-// Admin-Controls für read_post.html hinzufügen
-function addReadPostAdminControls() {
-    if (!checkAdminStatus()) return;
+// Admin-Controls für read_post.html hinzufügen (JWT-basiert)
+async function addReadPostAdminControls() {
+    if (!await checkAdminStatus()) return;
     
     const urlParams = new URLSearchParams(window.location.search);
     const postFilename = urlParams.get('post');
@@ -191,7 +286,7 @@ function addReadPostAdminControls() {
         if (adminControls) {
             adminControls.innerHTML = `
                 <button onclick="deletePostAndRedirect('${postFilename}')" class="btn btn-danger" style="${ADMIN_STYLES.deleteButton}">
-                    🗑️ Diesen Post löschen
+                    🗑️ Diesen Post löschen (Admin: ${currentUser?.username || 'JWT'})
                 </button>
             `;
         }
@@ -207,73 +302,60 @@ async function deletePostAndRedirect(filename) {
     }
 }
 
-// Passwort-Hash-Funktion (SHA-256)
-async function hashPassword(password) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Passwort-Setup für Admin (erste Verwendung)
-async function setupAdminPassword() {
-    const currentHash = localStorage.getItem(ADMIN_CONFIG.STORAGE_KEYS.PASSWORD_HASH);
-    if (currentHash && currentHash !== ADMIN_CONFIG.DEFAULT_PASSWORD_HASH) {
-        // Bereits eigenes Passwort gesetzt
-        return;
-    }
-    
-    const answer = confirm(ADMIN_MESSAGES.password.setup);
-    
-    if (answer) {
-        const newPassword = prompt(
-            'Neues Admin-Passwort eingeben:\n' +
-            '(Mindestens 8 Zeichen, speichern Sie es sicher!)'
-        );
-        
-        if (newPassword && newPassword.length >= 8) {
-            const hash = await hashPassword(newPassword);
-            localStorage.setItem(ADMIN_CONFIG.STORAGE_KEYS.PASSWORD_HASH, hash);
-            alert(ADMIN_MESSAGES.password.changed);
-        } else if (newPassword) {
-            alert(ADMIN_MESSAGES.password.tooShort);
-            setupAdminPassword(); // Nochmal versuchen
-        }
-    }
-}
-
-// Admin-System initialisieren
+// Admin-System initialisieren (JWT-basiert)
 async function initializeAdminSystem() {
-    checkAdminStatus();
+    console.log('🔐 Initialisiere JWT-basiertes Admin-System...');
+    
+    // JWT-Status prüfen
+    await checkAdminStatus();
     updateNavigationVisibility();
     
-    // Setup-Warnung für Standard-Passwort anzeigen
-    await setupAdminPassword();
-    
     if (isAdminLoggedIn) {
+        console.log('✅ Admin eingeloggt:', currentUser?.username);
         createAdminToolbar();
         // Kommentare mit Admin-Funktionen neu laden falls sie bereits angezeigt werden
         if (typeof initializeCommentsSystem === 'function') {
             setTimeout(initializeCommentsSystem, 100);
         }
     } else {
+        console.log('ℹ️ Kein Admin eingeloggt - Login-Button anzeigen');
         createAdminLoginButton();
+    }
+    
+    // Automatisches Token-Refresh alle 30 Minuten
+    if (isAdminLoggedIn) {
+        setInterval(async () => {
+            const refreshed = await refreshTokenIfNeeded();
+            if (!refreshed && currentJwtToken) {
+                console.log('🔄 Token-Refresh übersprungen - Token noch gültig');
+            }
+        }, 30 * 60 * 1000); // 30 Minuten
     }
 }
 
-// Admin Token-Management (zentralisiert)
-function setAdminToken() {
-    const expiryTime = Date.now() + (ADMIN_CONFIG.TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
-    localStorage.setItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_TOKEN, 'admin_logged_in');
-    localStorage.setItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_EXPIRY, expiryTime.toString());
-    isAdminLoggedIn = true;
-}
-
-function clearAdminToken() {
-    localStorage.removeItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_TOKEN);
-    localStorage.removeItem(ADMIN_CONFIG.STORAGE_KEYS.ADMIN_EXPIRY);
-    isAdminLoggedIn = false;
+// JWT Token-Refresh (optional - automatische Verlängerung)
+async function refreshTokenIfNeeded() {
+    if (!currentJwtToken) return false;
+    
+    try {
+        const result = await makeApiRequest('/auth/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentJwtToken}`
+            }
+        });
+        
+        if (result.success && result.data && result.data.success) {
+            currentJwtToken = result.data.token;
+            console.log('🔄 JWT-Token erfolgreich erneuert');
+            return true;
+        }
+    } catch (error) {
+        console.warn('⚠️ Token-Refresh fehlgeschlagen:', error);
+    }
+    
+    return false;
 }
 
 // UI-Element Sichtbarkeits-Utilities (zentralisiert)

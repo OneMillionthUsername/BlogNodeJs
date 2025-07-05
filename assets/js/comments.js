@@ -3,6 +3,18 @@
 
 console.log('💬 Kommentarsystem-Modul geladen');
 
+// JWT-Token aus Cookie für Kommentar-Funktionen
+function getTokenFromCookieForComments() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'authToken') {
+            return value;
+        }
+    }
+    return null;
+}
+
 // Alle Kommentare für einen Post vom Server laden
 async function loadComments(postFilename) {
     try {
@@ -79,9 +91,10 @@ async function addComment(postFilename, username, commentText) {
     }
 }
 
-// Kommentar löschen (nur für Admins)
+// Kommentar löschen (nur für Admins mit JWT)
 async function deleteComment(postFilename, commentId) {
-    if (!window.checkAdminStatus || !window.checkAdminStatus()) {
+    // Prüfe Admin-Status
+    if (typeof isAdminLoggedIn === 'undefined' || !isAdminLoggedIn) {
         alert('Nur Administratoren können Kommentare löschen.');
         return false;
     }
@@ -93,11 +106,33 @@ async function deleteComment(postFilename, commentId) {
     try {
         console.log(`🗑️ Lösche Kommentar: ${commentId} aus Post: ${postFilename}`);
         
+        // JWT-Token für Authentifizierung holen
+        const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
+                     getTokenFromCookieForComments();
+        
+        const headers = {};
+        
+        // Authorization Header hinzufügen falls Token verfügbar
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const response = await fetch(`/comments/${postFilename}/${commentId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: headers
         });
         
         const result = await response.json();
+        
+        // Bei 401/403 - Session abgelaufen
+        if (response.status === 401 || response.status === 403) {
+            alert('Session abgelaufen. Bitte melden Sie sich erneut an.');
+            // Optional: Admin-Logout aufrufen falls verfügbar
+            if (typeof adminLogout === 'function') {
+                await adminLogout();
+            }
+            return false;
+        }
         
         if (!response.ok) {
             alert('Fehler beim Löschen: ' + (result.error || 'Unbekannter Fehler'));
@@ -228,10 +263,10 @@ async function displayComments(postFilename) {
                         <i class="fas fa-user-circle"></i> ${comment.username}
                     </span>
                     <span class="comment-time">${formatCommentTime(comment.timestamp)}</span>
-                    ${window.checkAdminStatus && window.checkAdminStatus() ? 
+                    ${(typeof isAdminLoggedIn !== 'undefined' && isAdminLoggedIn) ? 
                         `<button onclick="deleteComment('${postFilename}', '${comment.id}')" 
                                  class="btn btn-sm btn-outline-danger comment-delete-btn" 
-                                 title="Kommentar löschen">
+                                 title="Kommentar löschen (JWT-Auth)">
                             <i class="fas fa-trash"></i>
                          </button>` : ''
                     }

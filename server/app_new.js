@@ -51,7 +51,7 @@ app.use((req, res, next) => {
     res.setHeader('Content-Security-Policy', 
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' https://cdn.tiny.cloud https://cdn.jsdelivr.net https://generativelanguage.googleapis.com; " +
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tiny.cloud; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
         "img-src 'self' data: https:; " +
         "connect-src 'self' https://generativelanguage.googleapis.com; " +
@@ -737,73 +737,6 @@ app.delete('/assets/uploads/:filename', authenticateToken, requireAdmin, (req, r
     console.log(`🗑️ Bild gelöscht von ${req.user.username}: ${filename}`);
     res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
   });
-});
-
-// POST /upload/simple - Einfacher Bild-Upload ohne Komprimierung (JWT-geschützt)
-app.post('/upload/simple', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    // Für FormData-Upload direkt aus req.body (hier sollte Multer verwendet werden, aber für Einfachheit...)
-    // Da TinyMCE meistens JSON sendet, verwenden wir den gleichen Ansatz wie bei /upload/image
-    const { imageData, filename } = req.body;
-    
-    if (!imageData || !filename) {
-      return res.status(400).json({ error: 'Bilddaten und Dateiname sind erforderlich' });
-    }
-
-    // Base64-Header entfernen falls vorhanden
-    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-    
-    // Sicherheitsvalidierung: Prüfe ob es valide Base64-Daten sind
-    try {
-      Buffer.from(base64Data, 'base64');
-    } catch (bufferError) {
-      return res.status(400).json({ error: 'Ungültiges Bildformat' });
-    }
-    
-    // Dateiname bereinigen
-    function sanitizeFilename(name) {
-      return name
-        .replace(/[^\w\.-]/g, '_') // Ersetze ungültige Zeichen durch Unterstriche
-        .replace(/_{2,}/g, '_') // Mehrfache Unterstriche reduzieren
-        .toLowerCase();
-    }
-    
-    const sanitizedFilename = sanitizeFilename(filename);
-    const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}-${sanitizedFilename}`;
-    
-    // Upload-Ordner erstellen falls nötig
-    const uploadDir = join(__dirname, '..', 'assets', 'uploads');
-    mkdir(uploadDir, { recursive: true }, (mkdirErr) => {
-      if (mkdirErr) {
-        console.error('Fehler beim Erstellen des Upload-Ordners:', mkdirErr);
-        return res.status(500).json({ error: 'Fehler beim Erstellen des Upload-Ordners' });
-      }
-      
-      // Bild-Datei schreiben
-      const imagePath = join(uploadDir, uniqueFilename);
-      writeFile(imagePath, base64Data, 'base64', (writeErr) => {
-        if (writeErr) {
-          console.error('Fehler beim Speichern des Bildes:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
-        }
-        
-        const imageUrl = `/assets/uploads/${uniqueFilename}`;
-        console.log(`📸 Einfacher Upload von ${req.user.username}: ${uniqueFilename}`);
-        
-        res.json({
-          message: 'Bild erfolgreich hochgeladen (einfach)',
-          filename: uniqueFilename,
-          url: imageUrl,
-          location: imageUrl // TinyMCE erwartet 'location' für die URL
-        });
-      });
-    });
-    
-  } catch (error) {
-    console.error('Fehler beim einfachen Upload:', error);
-    res.status(500).json({ error: 'Fehler beim einfachen Upload' });
-  }
 });
 
 // ===========================================
