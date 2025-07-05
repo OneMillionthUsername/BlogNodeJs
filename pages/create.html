@@ -182,21 +182,80 @@
     <script src="../assets/js/tinymce-editor.js" defer></script>
     
     <script defer>
-        // Initialisiere den Blog Editor nach dem Laden der Seite
+        // Warte bis alle Module geladen sind
+        let modulesLoaded = {
+            utils: false,
+            admin: false,
+            ai: false,
+            tinymce: false
+        };
+        
+        function checkAllModulesLoaded() {
+            return Object.values(modulesLoaded).every(loaded => loaded);
+        }
+        
+        function markModuleLoaded(module) {
+            modulesLoaded[module] = true;
+            console.log(`✅ Modul ${module} geladen`);
+            
+            if (checkAllModulesLoaded()) {
+                initializeAllComponents();
+            }
+        }
+        
+        // Initialisiere alle Komponenten nach dem Laden aller Module
+        async function initializeAllComponents() {
+            console.log('🚀 Alle Module geladen - starte Initialisierung...');
+            
+            try {
+                console.log('📋 Initialisiere Blog Utilities...');
+                if (typeof initializeBlogUtilities === 'function') {
+                    initializeBlogUtilities();
+                }
+                
+                console.log('👑 Initialisiere Admin System...');
+                if (typeof initializeAdminSystem === 'function') {
+                    initializeAdminSystem();
+                }
+                
+                console.log('✍️ Initialisiere Create Page...');
+                if (typeof initializeCreatePage === 'function') {
+                    await initializeCreatePage();
+                }
+                
+                // TinyMCE Editor explizit initialisieren
+                console.log('📝 Initialisiere TinyMCE Editor...');
+                if (typeof initializeBlogEditor === 'function') {
+                    await initializeBlogEditor();
+                } else {
+                    console.warn('⚠️ initializeBlogEditor Funktion nicht verfügbar');
+                }
+                
+                console.log('✅ Alle Komponenten erfolgreich initialisiert');
+            } catch (error) {
+                console.error('❌ Fehler bei der Komponenten-Initialisierung:', error);
+            }
+        }
+        
+        // Überwache das Laden der Module
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Initialisiere Blog-Komponenten...');
+            console.log('🎬 DOM geladen - prüfe Module...');
             
-            // Debug-Ausgaben für bessere Verfolgung
-            console.log('📋 Initialisiere Blog Utilities...');
-            initializeBlogUtilities();
-            
-            console.log('👑 Initialisiere Admin System...');
-            initializeAdminSystem();
-            
-            console.log('✍️ Initialisiere Create Page...');
-            initializeCreatePage();
-            
-            console.log('✅ Alle Komponenten initialisiert');
+            // Prüfe ob Module bereits verfügbar sind
+            setTimeout(() => {
+                if (typeof initializeBlogUtilities !== 'undefined') markModuleLoaded('utils');
+                if (typeof initializeAdminSystem !== 'undefined') markModuleLoaded('admin');
+                if (typeof showApiKeySetup !== 'undefined') markModuleLoaded('ai');
+                if (typeof initializeBlogEditor !== 'undefined') markModuleLoaded('tinymce');
+                
+                // Fallback: Wenn nach 3 Sekunden nicht alle Module geladen sind, trotzdem starten
+                setTimeout(() => {
+                    if (!checkAllModulesLoaded()) {
+                        console.warn('⚠️ Nicht alle Module rechtzeitig geladen - starte trotzdem...');
+                        initializeAllComponents();
+                    }
+                }, 3000);
+            }, 100);
         });
     </script>
 </body>

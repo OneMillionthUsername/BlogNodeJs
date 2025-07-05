@@ -23,27 +23,54 @@ function initializeBlogPostForm() {
         };
 
         try {
+            // JWT-Token für Authentifizierung holen
+            const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
+                         getTokenFromCookieForAPI();
+            
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Authorization Header hinzufügen falls Token verfügbar
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
             const response = await fetch('/blogpost', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json' // <-- HIER IST DIE WICHTIGE ÄNDERUNG!
-                },
-                body: JSON.stringify(postData) // <-- Hier werden die Daten als JSON-String verpackt
+                headers: headers,
+                body: JSON.stringify(postData)
             });
 
-            const result = await response.json(); // Oder response.text(), je nachdem was dein Server zurückgibt
+            const result = await response.json();
+            
+            // Bei 401/403 - Session abgelaufen
+            if (response.status === 401 || response.status === 403) {
+                document.getElementById('responseMessage').textContent = 'Session abgelaufen. Bitte melden Sie sich erneut an.';
+                // Optional: Admin-Logout aufrufen falls verfügbar
+                if (typeof adminLogout === 'function') {
+                    await adminLogout();
+                }
+                return;
+            }
+            
             document.getElementById('responseMessage').textContent = `Status: ${response.status} - ${result.message || result.error}`;
 
-            if (response.ok) { // Prüfe auf erfolgreichen HTTP-Status (2xx)
-                console.log('Blogpost erfolgreich erstellt:', result);
+            if (response.ok) {
+                console.log('✅ Blogpost erfolgreich erstellt:', result);
                 // Optional: Formular zurücksetzen oder Seite aktualisieren
                 document.getElementById('blogPostForm').reset();
+                
+                // TinyMCE-Editor zurücksetzen falls vorhanden
+                if (typeof tinymce !== 'undefined' && tinymce.activeEditor) {
+                    tinymce.activeEditor.setContent('');
+                }
             } else {
-                console.error('Fehler beim Erstellen des Blogposts:', result);
+                console.error('❌ Fehler beim Erstellen des Blogposts:', result);
             }
 
         } catch (error) {
-            console.error('Netzwerk- oder unerwarteter Fehler:', error);
+            console.error('❌ Netzwerk- oder unerwarteter Fehler:', error);
             document.getElementById('responseMessage').textContent = `Fehler: ${error.message}`;
         }
     });
@@ -399,4 +426,16 @@ function initializeBlogUtilities() {
 function getUrlParameter(paramName) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(paramName);
+}
+
+// JWT-Token aus Cookie für API-Aufrufe (Fallback für utils.js)
+function getTokenFromCookieForAPI() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'authToken') {
+            return value;
+        }
+    }
+    return null;
 }

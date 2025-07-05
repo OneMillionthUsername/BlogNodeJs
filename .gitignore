@@ -130,8 +130,11 @@ chrome-debug.log
 *.bak
 *.backup
 
-# TinyMCE temporäre Dateien
+# TinyMCE temporäre Dateien und lokale Installation
 tinymce-cache/
+
+# TinyMCE lokale Installation (npm-installiert)
+assets/js/tinymce/
 
 # Local Development Drafts
 drafts/
@@ -162,3 +165,11 @@ api-keys.backup
 # Sicherheitsberichte mit möglicherweise sensiblen Informationen
 # (Entfernen Sie diese Zeile wenn Sie Reports committen möchten)
 # API_SECURITY_REPORT.md
+
+# SSL/TLS Zertifikate (Development)
+ssl/*.pem
+ssl/*.csr
+ssl/*.key
+ssl/openssl.cnf
+# Aber generate-certs.js Script beibehalten
+!ssl/generate-certs.js
