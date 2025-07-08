@@ -136,6 +136,11 @@ tinymce-cache/
 # TinyMCE lokale Installation (npm-installiert)
 assets/js/tinymce/
 
+# Production Environment
+.env
+.env.production
+.env.local
+
 # Local Development Drafts
 drafts/
 .drafts/
