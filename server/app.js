@@ -6,6 +6,10 @@ import https from 'https';
 import http from 'http';
 import { readFileSync } from 'fs';
 import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
+
+// Environment-Variablen laden
+dotenv.config();
 import { 
     generateToken, 
     verifyToken, 
@@ -21,41 +25,57 @@ const __dirname = dirname(__filename);
 const publicDirectoryPath = join(__dirname, '..'); // Ein Ordner nach oben
 const app = express();
 
+// Plesk-Environment-Erkennung
+const IS_PLESK = process.env.PLESK_ENV === 'true' || process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+console.log(`🚀 Server-Modus: ${IS_PRODUCTION ? 'Production' : 'Development'}`);
+console.log(`🔧 Plesk-Integration: ${IS_PLESK ? 'Aktiviert' : 'Deaktiviert'}`);
+
 // Speicher für Aufrufe (in Produktion sollte das in einer Datenbank gespeichert werden)
 let postViews = {};
 
-// SSL-Zertifikate für HTTPS laden
+// SSL-Zertifikate nur in Development laden (Plesk übernimmt SSL in Production)
 let httpsOptions = null;
-try {
-    const sslPath = join(__dirname, '..', 'ssl');
-    httpsOptions = {
-        key: readFileSync(join(sslPath, 'private-key.pem')),
-        cert: readFileSync(join(sslPath, 'certificate.pem'))
-    };
-    console.log('✅ SSL-Zertifikate erfolgreich geladen');
-} catch (error) {
-    console.warn('⚠️ SSL-Zertifikate nicht gefunden - nur HTTP verfügbar');
-    console.warn('   Führen Sie "node ssl/generate-certs.js" aus, um HTTPS zu aktivieren');
+if (!IS_PLESK && !IS_PRODUCTION) {
+    try {
+        const sslPath = join(__dirname, '..', 'ssl');
+        httpsOptions = {
+            key: readFileSync(join(sslPath, 'private-key.pem')),
+            cert: readFileSync(join(sslPath, 'certificate.pem'))
+        };
+        console.log('✅ SSL-Zertifikate erfolgreich geladen (Development)');
+    } catch (error) {
+        console.warn('⚠️ SSL-Zertifikate nicht gefunden - nur HTTP verfügbar');
+        console.warn('   Führen Sie "node ssl/generate-certs.js" aus, um HTTPS zu aktivieren');
+    }
+} else {
+    console.log('✅ Production-Modus: SSL wird von Plesk/Webserver übernommen');
 }
 
 console.log(`Serververzeichnis: ${__dirname}`);
 
 // Security Headers Middleware
 app.use((req, res, next) => {
-    // HTTPS Strict Transport Security
-    if (httpsOptions) {
+    // HTTPS Strict Transport Security (nur in Production mit SSL)
+    if (IS_PRODUCTION || httpsOptions) {
         res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
     }
     
-    // Content Security Policy
+    // Erweiterte Content Security Policy für Production
+    const domain = process.env.DOMAIN || req.header('host') || 'localhost';
     res.setHeader('Content-Security-Policy', 
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' https://cdn.tiny.cloud https://cdn.jsdelivr.net https://generativelanguage.googleapis.com; " +
+        "script-src 'self' 'unsafe-inline' https://cdn.tiny.cloud https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://generativelanguage.googleapis.com; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tiny.cloud; " +
         "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        "img-src 'self' data: https:; " +
-        "connect-src 'self' https://generativelanguage.googleapis.com; " +
-        "media-src 'self';"
+        "img-src 'self' data: https: blob:; " +
+        "connect-src 'self' https://generativelanguage.googleapis.com https://cdn.tiny.cloud; " +
+        "frame-src 'none'; " +
+        "object-src 'none'; " +
+        "base-uri 'self'; " +
+        "form-action 'self';" +
+        (IS_PRODUCTION ? "" : " upgrade-insecure-requests;")
     );
     
     // Weitere Security Headers
@@ -67,9 +87,14 @@ app.use((req, res, next) => {
     next();
 });
 
-// HTTP zu HTTPS Redirect (nur wenn HTTPS verfügbar)
+// HTTP zu HTTPS Redirect (Plesk-kompatibel)
 app.use((req, res, next) => {
-    if (httpsOptions && req.header('x-forwarded-proto') !== 'https' && !req.secure) {
+    // Plesk verwendet x-forwarded-proto Header
+    if (IS_PLESK && req.header('x-forwarded-proto') === 'http') {
+        return res.redirect(301, `https://${req.header('host')}${req.url}`);
+    } 
+    // Development HTTPS Redirect
+    else if (!IS_PLESK && httpsOptions && req.header('x-forwarded-proto') !== 'https' && !req.secure) {
         return res.redirect(301, `https://${req.header('host')}${req.url}`);
     }
     next();
@@ -316,7 +341,7 @@ app.post('/auth/login', async (req, res) => {
         // Token als httpOnly Cookie setzen (sicherer als localStorage)
         res.cookie('authToken', token, {
             httpOnly: true,
-            secure: httpsOptions ? true : false, // Nur HTTPS in Produktion
+            secure: IS_PRODUCTION || httpsOptions ? true : false, // HTTPS in Production
             sameSite: 'strict',
             maxAge: 24 * 60 * 60 * 1000 // 24 Stunden
         });
@@ -406,7 +431,7 @@ app.post('/auth/refresh', (req, res) => {
         // Neuen Token als Cookie setzen
         res.cookie('authToken', newToken, {
             httpOnly: true,
-            secure: httpsOptions ? true : false,
+            secure: IS_PRODUCTION || httpsOptions ? true : false,
             sameSite: 'strict',
             maxAge: 24 * 60 * 60 * 1000
         });
@@ -810,29 +835,39 @@ app.post('/upload/simple', authenticateToken, requireAdmin, (req, res) => {
 // SERVER STARTEN
 // ===========================================
 
-const HTTP_PORT = 3000;
-const HTTPS_PORT = 3443;
+const PORT = process.env.PORT || (IS_PLESK ? 8080 : 3000);
+const HTTPS_PORT = process.env.HTTPS_PORT || (IS_PLESK ? 8443 : 3443);
+const HOST = process.env.HOST || '0.0.0.0';
+
+console.log(`🌐 Server-Konfiguration:`);
+console.log(`   HTTP Port: ${PORT}`);
+console.log(`   HTTPS Port: ${HTTPS_PORT}`);
+console.log(`   Host: ${HOST}`);
+console.log(`   Domain: ${process.env.DOMAIN || 'nicht gesetzt'}`);
 
 // HTTP Server (für Entwicklung und Redirects)
 const httpServer = http.createServer(app);
-httpServer.listen(HTTP_PORT, () => {
-    console.log(`🌐 HTTP Server läuft auf http://localhost:${HTTP_PORT}`);
-    if (!httpsOptions) {
+httpServer.listen(PORT, HOST, () => {
+    console.log(`🌐 HTTP Server läuft auf ${HOST}:${PORT}`);
+    if (IS_PLESK) {
+        console.log('🔧 Plesk-Modus: SSL wird von Plesk übernommen');
+        console.log(`📍 Öffentlich erreichbar unter: http${IS_PRODUCTION ? 's' : ''}://${process.env.DOMAIN || 'localhost'}`);
+    } else if (!httpsOptions) {
         console.log('ℹ️  Nur HTTP verfügbar - führen Sie "node ssl/generate-certs.js" aus für HTTPS');
     }
 });
 
-// HTTPS Server (falls SSL-Zertifikate verfügbar)
-if (httpsOptions) {
+// HTTPS Server nur in Development starten
+if (!IS_PLESK && httpsOptions) {
     const httpsServer = https.createServer(httpsOptions, app);
-    httpsServer.listen(HTTPS_PORT, () => {
-        console.log(`🔐 HTTPS Server läuft auf https://localhost:${HTTPS_PORT}`);
+    httpsServer.listen(HTTPS_PORT, HOST, () => {
+        console.log(`🔐 HTTPS Server läuft auf https://${HOST}:${HTTPS_PORT}`);
         console.log('✅ SSL/TLS aktiviert - sichere Verbindung verfügbar');
         console.log('📋 Zertifikat: Self-signed für Development (Browser-Warnung normal)');
         console.log('🔑 JWT-Authentifizierung aktiviert');
     });
     
-    // Graceful shutdown
+    // Graceful shutdown für beide Server
     process.on('SIGTERM', () => {
         console.log('📴 Shutting down servers...');
         httpServer.close();
