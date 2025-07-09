@@ -13,57 +13,56 @@ const __dirname = dirname(__filename);
 
 // JWT-Konfiguration
 const JWT_CONFIG = {
-    SECRET_KEY: process.env.JWT_SECRET || generateSecretKey(),
+    SECRET_KEY: getJWTSecret(),
     EXPIRES_IN: '24h', // Token-Lebensdauer
     ALGORITHM: 'HS256',
     ISSUER: 'blog-app',
     AUDIENCE: 'blog-users'
 };
 
-// Admin-Benutzer-Konfiguration (in Produktion aus Datenbank)
-const ADMIN_CONFIG = {
-    username: 'admin',
-    // Temporär: Klartext-Passwort für Debugging (NICHT für Produktion!)
-    passwordHash: 'admin123',
-    role: 'admin',
-    id: 'admin-001'
-};
-
-// Secret Key generieren und persistent speichern
-function generateSecretKey() {
-    const configPath = join(__dirname, '..', 'config', 'jwt-secret.txt');
+// JWT-Secret sicher laden (Environment-Variable oder generieren)
+function getJWTSecret() {
+    // 1. Priorität: Environment-Variable (Production)
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) {
+        console.log('✅ JWT-Secret aus Environment-Variable geladen');
+        return process.env.JWT_SECRET;
+    }
     
+    // 2. Fallback: Bestehende Datei lesen (Development)
+    const configPath = join(__dirname, '..', 'config', 'jwt-secret.txt');
     try {
-        // Versuche bestehenden Key zu laden
         if (existsSync(configPath)) {
             const existingKey = readFileSync(configPath, 'utf8').trim();
             if (existingKey.length >= 32) {
-                console.log('✅ JWT-Secret aus Datei geladen');
+                console.log('⚠️ JWT-Secret aus Datei geladen (Development)');
                 return existingKey;
             }
         }
     } catch (error) {
-        console.warn('⚠️ Konnte bestehenden JWT-Secret nicht laden');
+        console.warn('⚠️ Konnte JWT-Secret-Datei nicht lesen');
     }
     
-    // Neuen Secret Key generieren
-    const newSecret = crypto.randomBytes(64).toString('hex');
+    // 3. Letzter Fallback: Neuen Secret generieren und warnen
+    console.warn('🚨 WARNUNG: Kein JWT-Secret gefunden! Generiere temporären Secret...');
+    console.warn('🔧 Setzen Sie JWT_SECRET in der .env für Production!');
     
-    try {
-        // Config-Verzeichnis erstellen falls nötig
-        const configDir = join(__dirname, '..', 'config');
-        if (!existsSync(configDir)) {
-            mkdirSync(configDir, { recursive: true });
+    const tempSecret = crypto.randomBytes(64).toString('hex');
+    
+    // Nur in Development-Modus in Datei speichern
+    if (process.env.NODE_ENV !== 'production') {
+        try {
+            const configDir = join(__dirname, '..', 'config');
+            if (!existsSync(configDir)) {
+                mkdirSync(configDir, { recursive: true });
+            }
+            writeFileSync(configPath, tempSecret, 'utf8');
+            console.log('� Temporärer JWT-Secret für Development gespeichert');
+        } catch (error) {
+            console.warn('⚠️ Konnte temporären JWT-Secret nicht speichern');
         }
-        
-        // Secret Key speichern
-        writeFileSync(configPath, newSecret, 'utf8');
-        console.log('🔑 Neuer JWT-Secret generiert und gespeichert');
-    } catch (error) {
-        console.warn('⚠️ Konnte JWT-Secret nicht speichern, verwende temporären Key');
     }
     
-    return newSecret;
+    return tempSecret;
 }
 
 // JWT-Token generieren
@@ -223,6 +222,15 @@ export function getJWTConfig() {
         hasSecret: !!JWT_CONFIG.SECRET_KEY
     };
 }
+
+// Admin-Benutzer-Konfiguration (in Produktion aus Datenbank)
+const ADMIN_CONFIG = {
+    username: 'admin',
+    // Temporär: Klartext-Passwort für Debugging (NICHT für Produktion!)
+    passwordHash: 'admin123',
+    role: 'admin',
+    id: 'admin-001'
+};
 
 console.log('🔐 JWT-Authentifizierungs-Modul geladen');
 console.log('⚙️ Konfiguration:', getJWTConfig());
