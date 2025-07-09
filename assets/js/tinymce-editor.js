@@ -71,7 +71,7 @@ async function loadTinyMceScript() {
     }
     
     // Für Plesk/Production: Zuerst CDN versuchen
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (!isLocalDevelopment()) {
         console.log('🌐 Production-Modus: Versuche CDN zuerst...');
         try {
             const cdnLoaded = await tryCloudTinyMCE();
@@ -95,7 +95,7 @@ async function loadTinyMceScript() {
     }
     
     // Letzter Fallback: CDN falls noch nicht versucht
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (isLocalDevelopment()) {
         console.log('🌐 Fallback: Versuche CDN...');
         return await tryCloudTinyMCE();
     }
@@ -275,13 +275,13 @@ async function initializeTinyMCE() {
             menubar: 'edit view insert format tools help',
             
             // Basis-URL für TinyMCE dynamisch setzen
-            base_url: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            base_url: isLocalDevelopment() 
                 ? '/assets/js/tinymce' 
                 : 'https://cdn.tiny.cloud/1/' + (TINYMCE_CONFIG.apiKey || 'no-api-key') + '/tinymce/6',
             suffix: '.min',
             
             // Für CDN: base_url nicht setzen
-            ...(window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+            ...(!isLocalDevelopment() 
                 ? {} 
                 : { base_url: '/assets/js/tinymce', suffix: '.min' }),
             
@@ -910,9 +910,9 @@ function simpleImageUploadHandler(blobInfo, success, failure, progress) {
             reader.onload = function() {
                 const base64Data = reader.result;
                 
-                // JWT-Token für Authentication holen
-                const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
-                             getTokenFromCookieForUpload();
+        // JWT-Token für Authentication holen
+        const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
+                     getJwtTokenFromCookie();
                 
                 const headers = {
                     'Content-Type': 'application/json'
@@ -1133,7 +1133,7 @@ async function uploadWithRetry(base64Data, filename, originalBlob, success, fail
         
         // JWT-Token für Authentication holen
         const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
-                     getTokenFromCookieForUpload();
+                     getJwtTokenFromCookie();
         
         const headers = {
             'Content-Type': 'application/json'
@@ -1253,18 +1253,6 @@ function validateImageBeforeUpload(file) {
     }
     
     return true;
-}
-
-// JWT-Token aus Cookie für Upload-Funktionen (Fallback für TinyMCE)
-function getTokenFromCookieForUpload() {
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'authToken') {
-            return value;
-        }
-    }
-    return null;
 }
 
 // Initialisierung und Event Listener

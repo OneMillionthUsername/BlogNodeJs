@@ -3,18 +3,6 @@
 
 console.log('💬 Kommentarsystem-Modul geladen');
 
-// JWT-Token aus Cookie für Kommentar-Funktionen
-function getTokenFromCookieForComments() {
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'authToken') {
-            return value;
-        }
-    }
-    return null;
-}
-
 // Alle Kommentare für einen Post vom Server laden
 async function loadComments(postFilename) {
     try {
@@ -108,7 +96,7 @@ async function deleteComment(postFilename, commentId) {
         
         // JWT-Token für Authentifizierung holen
         const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
-                     getTokenFromCookieForComments();
+                     getJwtTokenFromCookie();
         
         const headers = {};
         
@@ -350,8 +338,7 @@ function updateCharCounter() {
 async function handleCommentSubmit(event) {
     event.preventDefault();
     
-    const urlParams = new URLSearchParams(window.location.search);
-    const postFilename = urlParams.get('post');
+    const postFilename = getUrlParameter('post');
     
     if (!postFilename) {
         alert('Fehler: Post-ID nicht gefunden.');
@@ -385,8 +372,7 @@ async function initializeCommentsSystem() {
     console.log('🚀 Kommentarsystem wird initialisiert...');
     
     // Post-Filename aus URL extrahieren
-    const urlParams = new URLSearchParams(window.location.search);
-    const postFilename = urlParams.get('post');
+    const postFilename = getUrlParameter('post');
     
     if (!postFilename) {
         console.warn('⚠️ Keine Post-ID gefunden, Kommentarsystem wird nicht geladen.');

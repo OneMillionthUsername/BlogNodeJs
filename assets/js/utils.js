@@ -1,6 +1,47 @@
 // Blog Utility Funktionen
 // Alle allgemeinen Blog-Funktionen sind hier zentralisiert
 
+// ===========================================
+// JWT-TOKEN VERWALTUNG (Zentrale Funktion)
+// ===========================================
+
+/**
+ * JWT-Token aus Cookie lesen (zentrale Funktion für alle Module)
+ * 
+ * Diese Funktion ersetzt die redundanten getTokenFromCookie(), 
+ * getTokenFromCookieForUpload() und getTokenFromCookieForComments() 
+ * Funktionen in allen anderen Modulen.
+ * 
+ * @returns {string|null} JWT-Token oder null falls nicht gefunden
+ */
+function getJwtTokenFromCookie() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'authToken') {
+            return value;
+        }
+    }
+    return null;
+}
+
+// Global verfügbar machen für alle Module
+window.getJwtTokenFromCookie = getJwtTokenFromCookie;
+
+// Zentrale Funktion zur Überprüfung der Entwicklungsumgebung
+function isLocalDevelopment() {
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
+// Global verfügbar machen
+window.isLocalDevelopment = isLocalDevelopment;
+
+console.log('✅ Zentrale JWT-Token-Funktion geladen und global verfügbar');
+
+// ===========================================
+// BLOG POST FORM HANDLING
+// ===========================================
+
 // Blog Post Form Handler (wird nur ausgeführt wenn das Element existiert)
 function initializeBlogPostForm() {
     const form = document.getElementById('blogPostForm');
@@ -25,7 +66,7 @@ function initializeBlogPostForm() {
         try {
             // JWT-Token für Authentifizierung holen
             const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
-                         getTokenFromCookieForAPI();
+                         getJwtTokenFromCookie();
             
             const headers = {
                 'Content-Type': 'application/json'
@@ -426,16 +467,4 @@ function initializeBlogUtilities() {
 function getUrlParameter(paramName) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(paramName);
-}
-
-// JWT-Token aus Cookie für API-Aufrufe (Fallback für utils.js)
-function getTokenFromCookieForAPI() {
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'authToken') {
-            return value;
-        }
-    }
-    return null;
 }

@@ -6,21 +6,9 @@ let isAdminLoggedIn = false;
 let currentJwtToken = null;
 let currentUser = null;
 
-// JWT-Token aus Cookie lesen (Fallback-Methode)
-function getTokenFromCookie() {
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'authToken') {
-            return value;
-        }
-    }
-    return null;
-}
-
 // API-Request mit JWT-Authorization Header
 async function makeApiRequestWithAuth(url, options = {}) {
-    const token = currentJwtToken || getTokenFromCookie();
+    const token = currentJwtToken || getJwtTokenFromCookie();
     
     if (token) {
         options.headers = {
@@ -46,7 +34,7 @@ async function checkAdminStatus() {
         if (result.success && result.data && result.data.valid) {
             isAdminLoggedIn = true;
             currentUser = result.data.user;
-            currentJwtToken = getTokenFromCookie(); // Token aus Cookie lesen
+            currentJwtToken = getJwtTokenFromCookie(); // Token aus Cookie lesen
             console.log('✅ Admin-Session aktiv:', currentUser.username);
             return true;
         }
@@ -278,8 +266,7 @@ async function initializeCreatePage() {
 async function addReadPostAdminControls() {
     if (!await checkAdminStatus()) return;
     
-    const urlParams = new URLSearchParams(window.location.search);
-    const postFilename = urlParams.get('post');
+    const postFilename = getUrlParameter('post');
     
     if (postFilename) {
         const adminControls = document.getElementById('admin-controls');
