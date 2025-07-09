@@ -238,6 +238,33 @@ upload-instructions.md
 deploy-secrets.md
 
 # ===========================================
+# SSL/TLS SICHERHEIT (KRITISCH)
+# ===========================================
+
+# SSL-Zertifikate und private Keys (NIEMALS committen!)
+ssl/*.pem
+ssl/*.key
+ssl/*.crt
+ssl/*.p12
+ssl/*.pfx
+ssl/*.der
+ssl/*.cer
+ssl/openssl.cnf
+
+# Aber SSL-Generator-Script ist OK (hilfreich für Development)
+!ssl/generate-certs.js
+!ssl/README.md
+
+# Weitere Zertifikat-Formate
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.der
+*.cer
+
+# ===========================================
 # KRITISCHE DATEIEN MIT SENSIBLEN DATEN
 # ===========================================
 
@@ -260,8 +287,8 @@ plesk.config.js
 plesk.*.js
 *.plesk.js
 
-# Apache/Nginx-Konfigurationsdateien
-.htaccess
+# Apache/Nginx-Konfigurationsdateien (sichere MIME-Type-Configs sind OK)
+# .htaccess ist sicher zu committen wenn nur MIME-Types/Performance
 .htpasswd
 nginx.conf
 apache.conf

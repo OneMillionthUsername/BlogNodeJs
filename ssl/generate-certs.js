@@ -15,11 +15,11 @@ x509_extensions = v3_req
 prompt = no
 
 [req_distinguished_name]
-C=DE
-ST=NRW
-L=Dortmund
-O=Blog Development
-OU=IT Department
+C=XX
+ST=State
+L=City
+O=Development Only
+OU=Local Development
 CN=localhost
 
 [v3_req]

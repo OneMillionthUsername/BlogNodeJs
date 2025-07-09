@@ -1,0 +1,36 @@
+# .htaccess für korrekte MIME-Types in Plesk
+# Diese Datei löst TinyMCE MIME-Type-Probleme
+
+# JavaScript-Dateien
+<FilesMatch "\.(js)$">
+    Header set Content-Type "application/javascript; charset=utf-8"
+</FilesMatch>
+
+# CSS-Dateien
+<FilesMatch "\.(css)$">
+    Header set Content-Type "text/css; charset=utf-8"
+</FilesMatch>
+
+# JSON-Dateien
+<FilesMatch "\.(json)$">
+    Header set Content-Type "application/json; charset=utf-8"
+</FilesMatch>
+
+# Cache-Control für TinyMCE Assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/css "access plus 1 year"
+</IfModule>
+
+# Zusätzliche MIME-Types für TinyMCE
+AddType application/javascript .js
+AddType text/css .css
+AddType application/json .json
+
+# Security Headers für TinyMCE (falls nötig)
+<FilesMatch "tinymce.*\.js$">
+    Header unset X-Content-Type-Options
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Type "application/javascript; charset=utf-8"
+</FilesMatch>
