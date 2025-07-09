@@ -227,3 +227,12 @@ CREDENTIALS.md
 # System-spezifische Dateien
 .plesk-config
 .easyname-config
+
+# Deployment-Checklisten mit sensiblen Daten
+PLESK_UPLOAD_CHECKLIST.md
+deployment-checklist.md
+upload-instructions.md
+
+# Weitere deployment-spezifische Dateien
+.deployment-notes
+deploy-secrets.md
