@@ -105,8 +105,27 @@ app.use(json({ limit: '50mb' })); // JSON-Body parsen mit erhöhtem Limit für B
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL-encoded Bodies mit erhöhtem Limit
 app.use(cookieParser()); // Cookie-Parser für JWT-Tokens
 
-// Statische Dateien
-app.use(express.static(publicDirectoryPath));
+// Statische Dateien mit korrekten MIME-Types
+app.use(express.static(publicDirectoryPath, {
+    setHeaders: (res, path) => {
+        // JavaScript-Dateien
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+        // CSS-Dateien
+        else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+        // JSON-Dateien
+        else if (path.endsWith('.json')) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        }
+        // Cache-Control für statische Assets
+        if (path.includes('/assets/js/tinymce/') || path.includes('/node_modules/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 Jahr
+        }
+    }
+}));
 
 // ===========================================
 // ÖFFENTLICHE ENDPOINTS

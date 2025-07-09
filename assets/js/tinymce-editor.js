@@ -62,7 +62,7 @@ function showTinyMceApiKeySetup() {
     return false;
 }
 
-// TinyMCE dynamisch laden mit verbessertem Fallback
+// TinyMCE dynamisch laden mit CDN-First Approach
 async function loadTinyMceScript() {
     // Prüfen ob TinyMCE bereits geladen ist
     if (typeof tinymce !== 'undefined') {
@@ -70,18 +70,41 @@ async function loadTinyMceScript() {
         return true;
     }
     
-    // Zuerst versuchen lokales TinyMCE zu laden (für Entwicklung/Offline)
-    console.log('🔄 Versuche zunächst lokales TinyMCE...');
+    // Für Plesk/Production: Zuerst CDN versuchen
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        console.log('🌐 Production-Modus: Versuche CDN zuerst...');
+        try {
+            const cdnLoaded = await tryCloudTinyMCE();
+            if (cdnLoaded) {
+                return true;
+            }
+        } catch (error) {
+            console.log('⚠️ CDN TinyMCE fehlgeschlagen, versuche lokale Version...');
+        }
+    }
+    
+    // Fallback: Lokales TinyMCE
+    console.log('🔄 Versuche lokales TinyMCE...');
     try {
         const localLoaded = await tryLocalTinyMCE();
         if (localLoaded) {
             return true;
         }
     } catch (error) {
-        console.log('⚠️ Lokales TinyMCE nicht verfügbar, versuche Cloud...');
+        console.log('⚠️ Lokales TinyMCE nicht verfügbar');
     }
     
-    // Fallback: Cloud TinyMCE mit Timeout
+    // Letzter Fallback: CDN falls noch nicht versucht
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('🌐 Fallback: Versuche CDN...');
+        return await tryCloudTinyMCE();
+    }
+    
+    throw new Error('TinyMCE konnte nicht geladen werden');
+}
+
+// Cloud TinyMCE laden
+async function tryCloudTinyMCE() {
     const apiKey = TINYMCE_CONFIG.apiKey || TINYMCE_CONFIG.defaultKey;
     const scriptUrl = `https://cdn.tiny.cloud/1/${apiKey}/tinymce/6/tinymce.min.js`;
     
@@ -121,7 +144,6 @@ async function tryLocalTinyMCE() {
     const localPaths = [
         '/assets/js/tinymce/tinymce.min.js',     // Hauptpfad
         '/node_modules/tinymce/tinymce.min.js',  // npm Installation
-        '/tinymce/tinymce.min.js',               // Einfacher Pfad
         'https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js' // CDN Fallback
     ];
     
@@ -252,9 +274,16 @@ async function initializeTinyMCE() {
             height: 500,
             menubar: 'edit view insert format tools help',
             
-            // Basis-URL für lokales TinyMCE setzen
-            base_url: '/assets/js/tinymce',
+            // Basis-URL für TinyMCE dynamisch setzen
+            base_url: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? '/assets/js/tinymce' 
+                : 'https://cdn.tiny.cloud/1/' + (TINYMCE_CONFIG.apiKey || 'no-api-key') + '/tinymce/6',
             suffix: '.min',
+            
+            // Für CDN: base_url nicht setzen
+            ...(window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+                ? {} 
+                : { base_url: '/assets/js/tinymce', suffix: '.min' }),
             
             plugins: [
                 'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
