@@ -10,10 +10,19 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Environment-Variablen-Validierung
+console.log('Environment variables check:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '[SET]' : '[NOT SET]');
+console.log('ENABLE_DB_MIGRATION:', process.env.ENABLE_DB_MIGRATION);
+
 // MariaDB Connection Pool konfigurieren
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
+    port: parseInt(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
@@ -25,12 +34,21 @@ const dbConfig = {
     collate: 'utf8mb4_unicode_ci'
 };
 
-console.log('🗄️ MariaDB-Konfiguration:', {
-    host: dbConfig.host,
-    port: dbConfig.port,
-    user: dbConfig.user,
-    database: dbConfig.database
-});
+// Validierung der kritischen Variablen
+const requiredDbVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missingDbVars = requiredDbVars.filter(varName => !process.env[varName]);
+
+if (missingDbVars.length > 0) {
+    console.error('Missing required database environment variables:', missingDbVars);
+    console.error('Create .env file with these variables before starting the server');
+    throw new Error('Database configuration incomplete');
+}
+
+console.log('MariaDB Configuration loaded:');
+console.log('Host:', dbConfig.host);
+console.log('Port:', dbConfig.port);
+console.log('User:', dbConfig.user);
+console.log('Database:', dbConfig.database);
 
 // Connection Pool erstellen
 const pool = mariadb.createPool(dbConfig);
@@ -41,10 +59,10 @@ export async function testConnection() {
     try {
         conn = await pool.getConnection();
         const result = await conn.query('SELECT VERSION() as version');
-        console.log('✅ MariaDB-Verbindung erfolgreich, Version:', result[0].version);
+        console.log('MariaDB connection successful, Version:', result[0].version);
         return true;
     } catch (error) {
-        console.error('❌ MariaDB-Verbindung fehlgeschlagen:', error.message);
+        console.error('MariaDB connection failed:', error.message);
         return false;
     } finally {
         if (conn) conn.release();
@@ -56,7 +74,7 @@ export async function initializeDatabase() {
     let conn;
     try {
         conn = await pool.getConnection();
-        console.log('🔧 Initialisiere MariaDB-Schema...');
+        console.log('Initializing MariaDB schema...');
 
         // Posts-Tabelle
         await conn.query(`
@@ -193,10 +211,10 @@ export async function initializeDatabase() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
-        console.log('✅ MariaDB-Schema erfolgreich erstellt/überprüft');
+        console.log('MariaDB schema created/verified successfully');
         return true;
     } catch (error) {
-        console.error('❌ Fehler beim Erstellen des MariaDB-Schemas:', error);
+        console.error('Error creating MariaDB schema:', error);
         return false;
     } finally {
         if (conn) conn.release();
@@ -210,7 +228,7 @@ export async function migrateExistingData() {
         const { readdir, readFile, stat } = await import('fs/promises');
         
         conn = await pool.getConnection();
-        console.log('🔄 Starte Migration der bestehenden Daten zu MariaDB...');
+        console.log('Starting migration of existing data to MariaDB...');
 
         // Posts migrieren
         const postsDir = join(__dirname, '..', 'posts');
@@ -218,7 +236,7 @@ export async function migrateExistingData() {
             const files = await readdir(postsDir);
             const jsonFiles = files.filter(file => file.endsWith('.json'));
             
-            console.log(`📦 Migriere ${jsonFiles.length} Posts zur MariaDB...`);
+            console.log(`Migrating ${jsonFiles.length} posts to MariaDB...`);
             
             let migratedPosts = 0;
             let skippedPosts = 0;
@@ -251,20 +269,20 @@ export async function migrateExistingData() {
                         ]);
                         
                         migratedPosts++;
-                        console.log(`✅ Post migriert: ${file}`);
+                        console.log(`Post migrated: ${file}`);
                     } else {
                         skippedPosts++;
-                        console.log(`⏭️ Post bereits vorhanden: ${file}`);
+                        console.log(`Post already exists: ${file}`);
                     }
                 } catch (error) {
-                    console.error(`❌ Fehler beim Migrieren von ${file}:`, error.message);
+                    console.error(`Error migrating ${file}:`, error.message);
                 }
             }
             
-            console.log(`📦 Posts-Migration abgeschlossen: ${migratedPosts} migriert, ${skippedPosts} übersprungen`);
+            console.log(`Posts migration completed: ${migratedPosts} migrated, ${skippedPosts} skipped`);
             
         } catch (error) {
-            console.log('ℹ️ Keine Posts zum Migrieren gefunden');
+            console.log('No posts found to migrate');
         }
 
         // Kommentare migrieren
@@ -273,7 +291,7 @@ export async function migrateExistingData() {
             const commentFiles = await readdir(commentsDir);
             const commentJsonFiles = commentFiles.filter(file => file.endsWith('_comments.json'));
             
-            console.log(`💬 Migriere Kommentare aus ${commentJsonFiles.length} Dateien...`);
+            console.log(`Migrating comments from ${commentJsonFiles.length} files...`);
             
             let migratedComments = 0;
             let skippedComments = 0;
@@ -309,25 +327,25 @@ export async function migrateExistingData() {
                             skippedComments++;
                         }
                     }
-                    console.log(`✅ Kommentare migriert: ${file}`);
+                    console.log(`Comments migrated: ${file}`);
                 } catch (error) {
-                    console.error(`❌ Fehler beim Migrieren von ${file}:`, error.message);
+                    console.error(`Error migrating ${file}:`, error.message);
                 }
             }
             
-            console.log(`💬 Kommentare-Migration abgeschlossen: ${migratedComments} migriert, ${skippedComments} übersprungen`);
+            console.log(`Comments migration completed: ${migratedComments} migrated, ${skippedComments} skipped`);
             
         } catch (error) {
-            console.log('ℹ️ Keine Kommentare zum Migrieren gefunden');
+            console.log('No comments found to migrate');
         }
 
         // Views-Daten migrieren (aus dem postViews-Objekt, falls verfügbar)
-        console.log('📊 Initialisiere Analytics-Daten...');
+        console.log('Initializing analytics data...');
         
-        console.log('✅ Datenmigration zu MariaDB abgeschlossen');
+        console.log('Data migration to MariaDB completed');
         return true;
     } catch (error) {
-        console.error('❌ Fehler bei der MariaDB-Migration:', error);
+        console.error('Error during MariaDB migration:', error);
         return false;
     } finally {
         if (conn) conn.release();
@@ -617,13 +635,13 @@ export const DatabaseService = {
 
 // Graceful Shutdown
 process.on('SIGINT', async () => {
-    console.log('📴 Schließe MariaDB-Verbindungen...');
+    console.log('Closing MariaDB connections...');
     await pool.end();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-    console.log('📴 Schließe MariaDB-Verbindungen...');
+    console.log('Closing MariaDB connections...');
     await pool.end();
     process.exit(0);
 });

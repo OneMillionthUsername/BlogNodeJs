@@ -11,6 +11,27 @@ import dotenv from 'dotenv';
 // Environment-Variablen laden
 dotenv.config();
 
+// Environment-Variablen-Validierung
+console.log('Environment variables check:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PLESK_ENV:', process.env.PLESK_ENV);
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '[SET]' : '[NOT SET]');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? '[SET]' : '[NOT SET]');
+console.log('ENABLE_DB_MIGRATION:', process.env.ENABLE_DB_MIGRATION);
+
+// Validierung der kritischen Variablen
+const requiredEnvVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+    console.error('Missing required environment variables:', missingVars);
+    console.error('Create .env file with these variables before starting the server');
+    process.exit(1);
+}
+
 // Datenbank-Integration
 import { 
     testConnection, 
@@ -38,34 +59,34 @@ const app = express();
 const IS_PLESK = process.env.PLESK_ENV === 'true' || process.env.NODE_ENV === 'production';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-console.log(`🚀 Server-Modus: ${IS_PRODUCTION ? 'Production' : 'Development'}`);
-console.log(`🔧 Plesk-Integration: ${IS_PLESK ? 'Aktiviert' : 'Deaktiviert'}`);
+console.log(`Server mode: ${IS_PRODUCTION ? 'Production' : 'Development'}`);
+console.log(`Plesk integration: ${IS_PLESK ? 'Enabled' : 'Disabled'}`);
 
 // Datenbank initialisieren
 async function initializeApp() {
-    console.log('🗄️ Initialisiere Datenbank...');
+    console.log('Initializing database...');
     
     // Datenbankverbindung testen
     const dbConnected = await testConnection();
     if (!dbConnected) {
-        console.error('❌ Datenbank-Verbindung fehlgeschlagen! Server wird beendet.');
+        console.error('Database connection failed! Server will exit.');
         process.exit(1);
     }
     
     // Schema erstellen
     const schemaCreated = await initializeDatabase();
     if (!schemaCreated) {
-        console.error('❌ Datenbank-Schema konnte nicht erstellt werden! Server wird beendet.');
+        console.error('Database schema could not be created! Server will exit.');
         process.exit(1);
     }
     
     // Migration ausführen falls aktiviert
     if (process.env.ENABLE_DB_MIGRATION === 'true') {
-        console.log('🔄 Führe Datenmigration aus...');
+        console.log('Running data migration...');
         await migrateExistingData();
     }
     
-    console.log('✅ Datenbank erfolgreich initialisiert');
+    console.log('Database successfully initialized');
 }
 
 // App initialisieren (asynchron)
@@ -83,13 +104,13 @@ if (!IS_PLESK && !IS_PRODUCTION) {
             key: readFileSync(join(sslPath, 'private-key.pem')),
             cert: readFileSync(join(sslPath, 'certificate.pem'))
         };
-        console.log('✅ SSL-Zertifikate erfolgreich geladen (Development)');
+        console.log('SSL certificates loaded successfully (Development)');
     } catch (error) {
-        console.warn('⚠️ SSL-Zertifikate nicht gefunden - nur HTTP verfügbar');
-        console.warn('   Führen Sie "node ssl/generate-certs.js" aus, um HTTPS zu aktivieren');
+        console.warn('SSL certificates not found - HTTP only available');
+        console.warn('   Run "node ssl/generate-certs.js" to enable HTTPS');
     }
 } else {
-    console.log('✅ Production-Modus: SSL wird von Plesk/Webserver übernommen');
+    console.log('Production mode: SSL handled by Plesk/webserver');
 }
 
 console.log(`Serververzeichnis: ${__dirname}`);
@@ -317,7 +338,7 @@ app.post('/auth/login', async (req, res) => {
             maxAge: 24 * 60 * 60 * 1000 // 24 Stunden
         });
         
-        console.log(`✅ Admin-Login erfolgreich: ${user.username}`);
+        console.log(`Admin login successful: ${user.username}`);
         
         res.json({
             success: true,
@@ -331,7 +352,7 @@ app.post('/auth/login', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Fehler beim Login:', error);
+        console.error('Login error:', error);
         res.status(500).json({ 
             error: 'Interner Serverfehler',
             success: false 
@@ -370,7 +391,7 @@ app.post('/auth/verify', (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Fehler bei Token-Verifikation:', error);
+        console.error('Token verification error:', error);
         res.status(500).json({ 
             valid: false,
             error: 'Interner Serverfehler' 
@@ -414,7 +435,7 @@ app.post('/auth/refresh', (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Fehler beim Token-Refresh:', error);
+        console.error('Token refresh error:', error);
         res.status(500).json({ 
             error: 'Interner Serverfehler',
             success: false 
@@ -454,7 +475,7 @@ app.post('/blogpost', authenticateToken, requireAdmin, async (req, res) => {
       author: req.user.username
     });
 
-    console.log(`✅ Blogpost erstellt von ${req.user.username}: ${result.filename}`);
+    console.log(`Post created by ${req.user.username}: ${result.filename}`);
     res.status(201).json({ 
       message: 'Blogpost gespeichert', 
       file: result.filename,
@@ -482,7 +503,7 @@ app.delete('/blogpost/:filename', authenticateToken, requireAdmin, async (req, r
       return res.status(404).json({ error: 'Blogpost nicht gefunden' });
     }
 
-    console.log(`🗑️ Blogpost gelöscht von ${req.user.username}: ${fileName}`);
+    console.log(`Post deleted by ${req.user.username}: ${fileName}`);
     res.json({ message: 'Blogpost erfolgreich gelöscht', file: fileName });
     
   } catch (error) {
@@ -512,7 +533,7 @@ app.post('/comments/:postFilename', async (req, res) => {
       ipAddress: req.ip || req.connection.remoteAddress
     });
 
-    console.log(`💬 Neuer Kommentar für ${postFilename} von ${result.comment.username}`);
+    console.log(`New comment for ${postFilename} by ${result.comment.username}`);
     res.status(201).json({ 
       message: 'Kommentar erfolgreich hinzugefügt',
       comment: result.comment
@@ -535,7 +556,7 @@ app.delete('/comments/:postFilename/:commentId', authenticateToken, requireAdmin
       return res.status(404).json({ error: 'Kommentar nicht gefunden' });
     }
 
-    console.log(`🗑️ Kommentar gelöscht von ${req.user.username}: ${commentId} in ${postFilename}`);
+    console.log(`Comment deleted by ${req.user.username}: ${commentId} in ${postFilename}`);
     res.json({ 
       message: 'Kommentar erfolgreich gelöscht',
       commentId: commentId
@@ -615,7 +636,7 @@ app.post('/upload/image', authenticateToken, requireAdmin, async (req, res) => {
         }
         
         const imageUrl = `/assets/uploads/${uniqueFilename}`;
-        console.log(`📸 Bild hochgeladen von ${req.user.username}: ${uniqueFilename}`);
+        console.log(`Image uploaded by ${req.user.username}: ${uniqueFilename}`);
         
         res.json({
           message: 'Bild erfolgreich hochgeladen',
@@ -651,7 +672,7 @@ app.delete('/assets/uploads/:filename', authenticateToken, requireAdmin, async (
         return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
       }
       
-      console.log(`🗑️ Bild gelöscht von ${req.user.username}: ${filename}`);
+      console.log(`Image deleted by ${req.user.username}: ${filename}`);
       res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
     });
     
@@ -717,7 +738,7 @@ app.post('/upload/simple', authenticateToken, requireAdmin, (req, res) => {
         }
         
         const imageUrl = `/assets/uploads/${uniqueFilename}`;
-        console.log(`📸 Einfacher Upload von ${req.user.username}: ${uniqueFilename}`);
+        console.log(`Simple upload by ${req.user.username}: ${uniqueFilename}`);
         
         res.json({
           message: 'Bild erfolgreich hochgeladen (einfach)',
@@ -742,21 +763,21 @@ const PORT = process.env.PORT || (IS_PLESK ? 8080 : 3000);
 const HTTPS_PORT = process.env.HTTPS_PORT || (IS_PLESK ? 8443 : 3443);
 const HOST = process.env.HOST || '0.0.0.0';
 
-console.log(`🌐 Server-Konfiguration:`);
+console.log(`Server configuration:`);
 console.log(`   HTTP Port: ${PORT}`);
 console.log(`   HTTPS Port: ${HTTPS_PORT}`);
 console.log(`   Host: ${HOST}`);
-console.log(`   Domain: ${process.env.DOMAIN || 'nicht gesetzt'}`);
+console.log(`   Domain: ${process.env.DOMAIN || 'not set'}`);
 
 // HTTP Server (für Entwicklung und Redirects)
 const httpServer = http.createServer(app);
 httpServer.listen(PORT, HOST, () => {
-    console.log(`🌐 HTTP Server läuft auf ${HOST}:${PORT}`);
+    console.log(`HTTP Server running on ${HOST}:${PORT}`);
     if (IS_PLESK) {
-        console.log('🔧 Plesk-Modus: SSL wird von Plesk übernommen');
-        console.log(`📍 Öffentlich erreichbar unter: http${IS_PRODUCTION ? 's' : ''}://${process.env.DOMAIN || 'localhost'}`);
+        console.log('Plesk mode: SSL handled by Plesk');
+        console.log(`Publicly accessible at: http${IS_PRODUCTION ? 's' : ''}://${process.env.DOMAIN || 'localhost'}`);
     } else if (!httpsOptions) {
-        console.log('ℹ️  Nur HTTP verfügbar - führen Sie "node ssl/generate-certs.js" aus für HTTPS');
+        console.log('HTTP only available - run "node ssl/generate-certs.js" for HTTPS');
     }
 });
 
@@ -764,22 +785,22 @@ httpServer.listen(PORT, HOST, () => {
 if (!IS_PLESK && httpsOptions) {
     const httpsServer = https.createServer(httpsOptions, app);
     httpsServer.listen(HTTPS_PORT, HOST, () => {
-        console.log(`🔐 HTTPS Server läuft auf https://${HOST}:${HTTPS_PORT}`);
-        console.log('✅ SSL/TLS aktiviert - sichere Verbindung verfügbar');
-        console.log('📋 Zertifikat: Self-signed für Development (Browser-Warnung normal)');
-        console.log('🔑 JWT-Authentifizierung aktiviert');
+        console.log(`HTTPS Server running on https://${HOST}:${HTTPS_PORT}`);
+        console.log('SSL/TLS enabled - secure connection available');
+        console.log('Certificate: Self-signed for development (browser warning normal)');
+        console.log('JWT authentication enabled');
     });
     
     // Graceful shutdown für beide Server
     process.on('SIGTERM', () => {
-        console.log('📴 Shutting down servers...');
+        console.log('Shutting down servers...');
         httpServer.close();
         httpsServer.close();
     });
 } else {
     // Graceful shutdown nur für HTTP
     process.on('SIGTERM', () => {
-        console.log('📴 Shutting down HTTP server...');
+        console.log('Shutting down HTTP server...');
         httpServer.close();
     });
 }
