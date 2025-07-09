@@ -236,3 +236,37 @@ upload-instructions.md
 # Weitere deployment-spezifische Dateien
 .deployment-notes
 deploy-secrets.md
+
+# ===========================================
+# KRITISCHE DATEIEN MIT SENSIBLEN DATEN
+# ===========================================
+
+# Environment-Templates mit Beispiel-Secrets
+.env.template
+.env.example
+
+# Deployment-Scripts mit Credentials
+deploy.sh
+deploy.bat
+deployment-script.*
+
+# Passwort-Generierung und Test-Scripts
+generate-hash.js
+test-password.js
+password-test.*
+
+# Plesk-Konfigurationsdateien
+plesk.config.js
+plesk.*.js
+*.plesk.js
+
+# Apache/Nginx-Konfigurationsdateien
+.htaccess
+.htpasswd
+nginx.conf
+apache.conf
+
+# Alle Markdown-Dokumentationen (enthalten oft sensible Infos)
+*.md
+!README.md
+# Ausnahme: Nur README.md ist öffentlich sicher
