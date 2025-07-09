@@ -36,7 +36,7 @@ function isLocalDevelopment() {
 // Global verfügbar machen
 window.isLocalDevelopment = isLocalDevelopment;
 
-console.log('✅ Zentrale JWT-Token-Funktion geladen und global verfügbar');
+console.log('Central JWT token function loaded and globally available');
 
 // ===========================================
 // BLOG POST FORM HANDLING
@@ -98,7 +98,7 @@ function initializeBlogPostForm() {
             document.getElementById('responseMessage').textContent = `Status: ${response.status} - ${result.message || result.error}`;
 
             if (response.ok) {
-                console.log('✅ Blogpost erfolgreich erstellt:', result);
+                console.log('Blogpost created successfully:', result);
                 // Optional: Formular zurücksetzen oder Seite aktualisieren
                 document.getElementById('blogPostForm').reset();
                 
@@ -107,11 +107,11 @@ function initializeBlogPostForm() {
                     tinymce.activeEditor.setContent('');
                 }
             } else {
-                console.error('❌ Fehler beim Erstellen des Blogposts:', result);
+                console.error('Error creating blogpost:', result);
             }
 
         } catch (error) {
-            console.error('❌ Netzwerk- oder unerwarteter Fehler:', error);
+            console.error('Network or unexpected error:', error);
             document.getElementById('responseMessage').textContent = `Fehler: ${error.message}`;
         }
     });
@@ -181,7 +181,7 @@ async function loadAndDisplayBlogPost() {
     
     // Prüfen, ob ein Post-Parameter in der URL vorhanden ist
     if (!postId) {
-        document.getElementById('loading').innerHTML = '<p class="error-message">❌ Kein Blogpost ausgewählt.</p>';
+        document.getElementById('loading').innerHTML = '<p class="error-message">No blogpost selected.</p>';
         return;
     }
 
@@ -198,7 +198,7 @@ async function loadAndDisplayBlogPost() {
         
     } catch (error) {
         console.error('Fehler beim Laden des Blogposts:', error);
-        document.getElementById('loading').innerHTML = '<p class="error-message">❌ Fehler beim Laden des Blogposts.</p>';
+        document.getElementById('loading').innerHTML = '<p class="error-message">Error loading blogpost.</p>';
     }
 }
 
@@ -213,8 +213,8 @@ function updateBlogPostUI(post) {
     const readingTime = calculateReadingTime(post.content);
     
     document.getElementById('meta').innerHTML = `
-        <div class="post-date">📅 Veröffentlicht am ${postDate} um ${postTime}</div>
-        <div class="post-reading-time">⏱️ Lesezeit: ca. ${readingTime} Min.</div>
+        <div class="post-date">Published on ${postDate} at ${postTime}</div>
+        <div class="post-reading-time">Reading time: approx. ${readingTime} min.</div>
     `;
     
     // Inhalt formatieren und einfügen
@@ -225,7 +225,7 @@ function updateBlogPostUI(post) {
     if (post.tags && post.tags.length > 0) {
         const tagsHtml = post.tags.map(tag => `<span class="tag">${tag}</span>`).join('');
         document.getElementById('tags').innerHTML = `
-            <div class="tags-label">🏷️ Tags:</div>
+            <div class="tags-label">Tags:</div>
             <div class="tags-list">${tagsHtml}</div>
         `;
         document.getElementById('tags').style.display = 'block';
@@ -256,9 +256,9 @@ async function loadAndDisplayArchivePosts() {
         if (archivePosts.length === 0) {
             listContainer.innerHTML = `
                 <div class="no-posts">
-                    <div class="no-posts-icon">📚</div>
-                    <h3>Kein Archiv vorhanden</h3>
-                    <p>Es sind noch keine Blogposts älter als 3 Monate vorhanden.</p>
+                    <div class="no-posts-icon">Archive</div>
+                    <h3>No archive available</h3>
+                    <p>There are no blog posts older than 3 months yet.</p>
                 </div>
             `;
             return;
@@ -270,7 +270,7 @@ async function loadAndDisplayArchivePosts() {
             html += `
                 <div class="archive-post-item">
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
-                    <p class="post-meta">📅 ${postDate}</p>
+                    <p class="post-meta">${postDate}</p>
                 </div>
             `;
         });
@@ -309,10 +309,10 @@ async function loadAndDisplayRecentPosts() {
         if (recentPosts.length === 0) {
             listContainer.innerHTML = `
                 <div class="no-posts">
-                    <div class="no-posts-icon">📝</div>
-                    <h3>Keine aktuellen Blogposts</h3>
-                    <p>In den letzten 3 Monaten wurden keine Blogposts veröffentlicht.</p>
-                    <a href="create.html" class="btn btn-outline-primary mt-3">✍️ Ersten Post erstellen</a>
+                    <div class="no-posts-icon">Posts</div>
+                    <h3>No recent blog posts</h3>
+                    <p>No blog posts have been published in the last 3 months.</p>
+                    <a href="create.html" class="btn btn-outline-primary mt-3">Create first post</a>
                 </div>
             `;
             return;
@@ -361,7 +361,7 @@ async function loadAndDisplayRecentPosts() {
                             <a href="read_post.html?post=${post.filename}">${post.title}</a>
                         </h3>
                         <div class="post-card-meta">
-                            <span class="post-date">📅 ${formattedDate}</span>
+                            <span class="post-date">${formattedDate}</span>
                             <span class="post-time-ago">${timeAgo}</span>
                         </div>
                     </div>
@@ -369,13 +369,13 @@ async function loadAndDisplayRecentPosts() {
                     <div class="post-card-content">
                         ${post.tags.length > 0 ? `
                             <div class="post-card-tags">
-                                🏷️ ${post.tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}
+                                Tags: ${post.tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}
                             </div>
                         ` : ''}
                         
                         <div class="post-card-actions">
                             <a href="read_post.html?post=${post.filename}" class="read-more-btn">
-                                📖 Weiterlesen
+                                Read more
                             </a>
                         </div>
                     </div>
@@ -395,10 +395,10 @@ async function loadAndDisplayRecentPosts() {
         console.error('Fehler beim Laden der Blogposts:', error);
         document.getElementById('blogPostsList').innerHTML = `
             <div class="error-message">
-                <div class="error-icon">❌</div>
-                <h3>Fehler beim Laden</h3>
-                <p>Die Blogposts konnten nicht geladen werden.</p>
-                <button onclick="loadAndDisplayRecentPosts()" class="btn btn-outline-primary mt-3">🔄 Erneut versuchen</button>
+                <div class="error-icon">Error</div>
+                <h3>Loading failed</h3>
+                <p>The blog posts could not be loaded.</p>
+                <button onclick="loadAndDisplayRecentPosts()" class="btn btn-outline-primary mt-3">Try again</button>
             </div>
         `;
     }
@@ -415,9 +415,9 @@ async function loadAndDisplayMostReadPosts() {
         if (posts.length === 0) {
             listContainer.innerHTML = `
                 <div class="no-posts">
-                    <div class="no-posts-icon">📊</div>
-                    <h3>Keine Statistiken vorhanden</h3>
-                    <p>Es sind noch keine Aufrufe von Blogposts vorhanden.</p>
+                    <div class="no-posts-icon">Statistics</div>
+                    <h3>No statistics available</h3>
+                    <p>There are no blog post views available yet.</p>
                 </div>
             `;
             return;
@@ -431,7 +431,7 @@ async function loadAndDisplayMostReadPosts() {
                 <div class="most-read-item">
                     <span class="rank">#${rank}</span>
                     <h3><a href="read_post.html?post=${post.filename}">${post.title}</a></h3>
-                    <p>👀 ${post.views} Aufrufe | 📅 ${postDate}</p>
+                    <p>${post.views} views | ${postDate}</p>
                 </div>
             `;
         });
@@ -448,10 +448,10 @@ async function loadAndDisplayMostReadPosts() {
         console.error('Fehler beim Laden der Statistiken:', error);
         document.getElementById('mostReadPosts').innerHTML = `
             <div class="error-message">
-                <div class="error-icon">❌</div>
-                <h3>Fehler beim Laden</h3>
-                <p>Die Statistiken konnten nicht geladen werden.</p>
-                <button onclick="loadAndDisplayMostReadPosts()" class="btn btn-outline-primary mt-3">🔄 Erneut versuchen</button>
+                <div class="error-icon">Error</div>
+                <h3>Loading failed</h3>
+                <p>The statistics could not be loaded.</p>
+                <button onclick="loadAndDisplayMostReadPosts()" class="btn btn-outline-primary mt-3">Try again</button>
             </div>
         `;
     }
