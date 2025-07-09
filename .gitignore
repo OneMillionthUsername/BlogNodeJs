@@ -178,3 +178,52 @@ ssl/*.key
 ssl/openssl.cnf
 # Aber generate-certs.js Script beibehalten
 !ssl/generate-certs.js
+
+# ===========================================
+# ZUSÄTZLICHE SICHERHEITS-AUSSCHLÜSSE
+# ===========================================
+
+# JWT-Secrets und Konfigurationsdateien
+config/jwt-secret.txt
+config/*.secret
+config/*.key
+*.jwt
+
+# Datenbank-Backups und -Dumps
+*.sql
+*.dump
+database-backup/
+db-backups/
+
+# Passwort-Hash-Dateien
+password-hashes.txt
+admin-passwords.txt
+*.hash
+
+# Produktions-Konfigurationsdateien
+plesk.production.config.js
+production.config.js
+server.production.js
+
+# Migrations-Logs
+migration-*.log
+migration-backup/
+
+# Temporäre Admin-Dateien
+admin-temp/
+temp-uploads/
+.admin-session
+
+# Weitere API-Schlüssel-Formate
+.api-keys
+gemini-api.key
+tinymce-api.key
+
+# Persönliche Notizen und TODOs
+NOTES.md
+TODO.private.md
+CREDENTIALS.md
+
+# System-spezifische Dateien
+.plesk-config
+.easyname-config
