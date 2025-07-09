@@ -10,6 +10,15 @@ import dotenv from 'dotenv';
 
 // Environment-Variablen laden
 dotenv.config();
+
+// Datenbank-Integration
+import { 
+    testConnection, 
+    initializeDatabase, 
+    migrateExistingData, 
+    DatabaseService 
+} from './database.js';
+
 import { 
     generateToken, 
     verifyToken, 
@@ -32,7 +41,37 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 console.log(`🚀 Server-Modus: ${IS_PRODUCTION ? 'Production' : 'Development'}`);
 console.log(`🔧 Plesk-Integration: ${IS_PLESK ? 'Aktiviert' : 'Deaktiviert'}`);
 
-// Speicher für Aufrufe (in Produktion sollte das in einer Datenbank gespeichert werden)
+// Datenbank initialisieren
+async function initializeApp() {
+    console.log('🗄️ Initialisiere Datenbank...');
+    
+    // Datenbankverbindung testen
+    const dbConnected = await testConnection();
+    if (!dbConnected) {
+        console.error('❌ Datenbank-Verbindung fehlgeschlagen! Server wird beendet.');
+        process.exit(1);
+    }
+    
+    // Schema erstellen
+    const schemaCreated = await initializeDatabase();
+    if (!schemaCreated) {
+        console.error('❌ Datenbank-Schema konnte nicht erstellt werden! Server wird beendet.');
+        process.exit(1);
+    }
+    
+    // Migration ausführen falls aktiviert
+    if (process.env.ENABLE_DB_MIGRATION === 'true') {
+        console.log('🔄 Führe Datenmigration aus...');
+        await migrateExistingData();
+    }
+    
+    console.log('✅ Datenbank erfolgreich initialisiert');
+}
+
+// App initialisieren (asynchron)
+await initializeApp();
+
+// Speicher für Aufrufe (DEPRECATED - wird durch Datenbank ersetzt)
 let postViews = {};
 
 // SSL-Zertifikate nur in Development laden (Plesk übernimmt SSL in Production)
@@ -135,156 +174,69 @@ app.get('/', (req, res) => {
   res.sendFile(join(publicDirectoryPath, 'index.html'));
 });
 
-// GET /blogpost/:filename - Einzelnen Blogpost abrufen
-app.get('/blogpost/:filename', (req, res) => {
+// GET /blogpost/:filename - Einzelnen Blogpost abrufen (Datenbank)
+app.get('/blogpost/:filename', async (req, res) => {
   const fileName = req.params.filename;
-  const filePath = join(__dirname, '..', 'posts', fileName);
 
-  // Aufruf zählen
-  if (!postViews[fileName]) {
-    postViews[fileName] = 0;
-  }
-  postViews[fileName]++;
-
-  readFile(filePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
+  try {
+    const post = await DatabaseService.getPost(fileName);
+    
+    if (!post) {
       return res.status(404).json({ error: 'Blogpost nicht gefunden' });
     }
 
-    res.setHeader("Content-Type", "application/json");
-    res.send(data);
-  });
-});
-
-// GET /blogposts - Alle Blogposts auflisten
-app.get('/blogposts', (req, res) => {
-  const postsDir = join(__dirname, '..', 'posts');
-  
-  readdir(postsDir, (err, files) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Fehler beim Lesen der Blogposts' });
-    }
-
-    // Nur JSON-Dateien filtern
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    // View tracken in Datenbank
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.get('User-Agent');
+    const referer = req.get('Referer');
     
-    // Alle Blogposts lesen und deren Titel extrahieren
-    const blogPosts = [];
-    let processedFiles = 0;
-
-    if (jsonFiles.length === 0) {
-      return res.json([]);
-    }
-
-    jsonFiles.forEach(file => {
-      const filePath = join(postsDir, file);
-      
-      readFile(filePath, 'utf8', (err, data) => {
-        if (err) {
-          console.error(`Fehler beim Lesen von ${file}:`, err);
-        } else {
-          try {
-            const post = JSON.parse(data);
-            blogPosts.push({
-              filename: file,
-              title: post.title,
-              date: post.date,
-              tags: post.tags || [],
-              author: post.author || 'Unbekannt'
-            });
-          } catch (parseErr) {
-            console.error(`Fehler beim Parsen von ${file}:`, parseErr);
-          }
-        }
-        
-        processedFiles++;
-        if (processedFiles === jsonFiles.length) {
-          // Sortiere nach Datum (neueste zuerst)
-          blogPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
-          res.json(blogPosts);
-        }
-      });
+    // Asynchron tracken (blockiert Response nicht)
+    DatabaseService.incrementViews(fileName, ipAddress, userAgent, referer).catch(err => {
+      console.error('Fehler beim Tracking:', err);
     });
-  });
+
+    res.setHeader("Content-Type", "application/json");
+    res.json(post);
+  } catch (error) {
+    console.error('Fehler beim Laden des Posts:', error);
+    res.status(500).json({ error: 'Serverfehler beim Laden des Posts' });
+  }
 });
 
-// GET /most-read - Meistgelesene Blogposts
-app.get('/most-read', (req, res) => {
-  const postsDir = join(__dirname, '..', 'posts');
-  
-  readdir(postsDir, (err, files) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Fehler beim Lesen der Blogposts' });
-    }
-
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
-    const blogPosts = [];
-    let processedFiles = 0;
-
-    if (jsonFiles.length === 0) {
-      return res.json([]);
-    }
-
-    jsonFiles.forEach(file => {
-      const filePath = join(postsDir, file);
-      
-      readFile(filePath, 'utf8', (err, data) => {
-        if (err) {
-          console.error(`Fehler beim Lesen von ${file}:`, err);
-        } else {
-          try {
-            const post = JSON.parse(data);
-            blogPosts.push({
-              filename: file,
-              title: post.title,
-              date: post.date,
-              tags: post.tags || [],
-              views: postViews[file] || 0,
-              author: post.author || 'Unbekannt'
-            });
-          } catch (parseErr) {
-            console.error(`Fehler beim Parsen von ${file}:`, parseErr);
-          }
-        }
-        
-        processedFiles++;
-        if (processedFiles === jsonFiles.length) {
-          // Sortiere nach Aufrufen (meistgelesene zuerst)
-          blogPosts.sort((a, b) => b.views - a.views);
-          res.json(blogPosts);
-        }
-      });
-    });
-  });
+// GET /blogposts - Alle Blogposts auflisten (Datenbank)
+app.get('/blogposts', async (req, res) => {
+  try {
+    const posts = await DatabaseService.getAllPosts();
+    res.json(posts);
+  } catch (error) {
+    console.error('Fehler beim Laden der Posts:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der Blogposts' });
+  }
 });
 
-// GET /comments/:postFilename - Kommentare für einen Post abrufen
-app.get('/comments/:postFilename', (req, res) => {
+// GET /most-read - Meistgelesene Blogposts (Datenbank)
+app.get('/most-read', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const posts = await DatabaseService.getMostReadPosts(limit);
+    res.json(posts);
+  } catch (error) {
+    console.error('Fehler beim Laden der meistgelesenen Posts:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der meistgelesenen Posts' });
+  }
+});
+
+// GET /comments/:postFilename - Kommentare für einen Post abrufen (Datenbank)
+app.get('/comments/:postFilename', async (req, res) => {
   const postFilename = req.params.postFilename;
-  const commentsFileName = postFilename.replace('.json', '_comments.json');
-  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
 
-  readFile(commentsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        // Datei existiert nicht - keine Kommentare vorhanden
-        return res.json([]);
-      }
-      console.error('Fehler beim Lesen der Kommentardatei:', err);
-      return res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
-    }
-
-    try {
-      const comments = JSON.parse(data);
-      res.json(comments);
-    } catch (parseErr) {
-      console.error('Fehler beim Parsen der Kommentardatei:', parseErr);
-      res.status(500).json({ error: 'Fehler beim Verarbeiten der Kommentare' });
-    }
-  });
+  try {
+    const comments = await DatabaseService.getCommentsByPost(postFilename);
+    res.json(comments);
+  } catch (error) {
+    console.error('Fehler beim Laden der Kommentare:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
+  }
 });
 
 // GET /assets/uploads/:filename - Bilder ausliefern
@@ -486,95 +438,61 @@ app.post('/auth/logout', (req, res) => {
 // ADMIN-GESCHÜTZTE ENDPOINTS (JWT erforderlich)
 // ===========================================
 
-// POST /blogpost - Blogbeitrag speichern (JWT-geschützt)
-app.post('/blogpost', authenticateToken, requireAdmin, (req, res) => {
+// POST /blogpost - Blogbeitrag speichern (JWT-geschützt, Datenbank)
+app.post('/blogpost', authenticateToken, requireAdmin, async (req, res) => {
   const { title, content, tags } = req.body;
 
   if (!title || !content) {
-    return res.status(400).json({ error: 'title und content sind erforderlich' });
+    return res.status(400).json({ error: 'Titel und Inhalt sind erforderlich' });
   }
 
-  const blogPost = {
-    title,
-    content,
-    tags: tags || [],
-    date: new Date().toISOString(),
-    author: req.user.username // Author aus JWT-Token hinzufügen
-  };
-
-  // Funktion zur Bereinigung von Dateinamen
-  function sanitizeFileName(fileName) {
-    return fileName
-      .toLowerCase()
-      .replace(/[^\w\s-äöüß]/g, '') // Entferne alle ungültigen Zeichen, behalte nur Buchstaben, Zahlen, Leerzeichen, Bindestriche und Umlaute
-      .replace(/\s+/g, '-') // Ersetze Leerzeichen durch Bindestriche
-      .replace(/-+/g, '-') // Ersetze mehrere aufeinanderfolgende Bindestriche durch einen
-      .replace(/^-+|-+$/g, ''); // Entferne Bindestriche am Anfang und Ende
-  }
-
-  const sanitizedTitle = sanitizeFileName(title);
-  const fileName = `${blogPost.date.split('T')[0]}-${sanitizedTitle}.json`;
-  const filePath = join(__dirname, '..', 'posts', fileName);
-
-  // Ordner anlegen, falls nicht vorhanden
-  mkdir(dirname(filePath), { recursive: true }, (err) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Fehler beim Anlegen des Ordners' });
-    }
-
-    writeFile(filePath, JSON.stringify(blogPost, null, 2), (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: 'Fehler beim Speichern des Blogposts' });
-      }
-
-      console.log(`✅ Blogpost erstellt von ${req.user.username}: ${fileName}`);
-      res.status(201).json({ message: 'Blogpost gespeichert', file: fileName });
+  try {
+    const result = await DatabaseService.createPost({
+      title,
+      content,
+      tags,
+      author: req.user.username
     });
-  });
+
+    console.log(`✅ Blogpost erstellt von ${req.user.username}: ${result.filename}`);
+    res.status(201).json({ 
+      message: 'Blogpost gespeichert', 
+      file: result.filename,
+      postId: result.postId
+    });
+    
+  } catch (error) {
+    console.error('Fehler beim Erstellen des Posts:', error);
+    if (error.message.includes('existiert bereits')) {
+      res.status(409).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'Fehler beim Speichern des Blogposts' });
+    }
+  }
 });
 
-// DELETE /blogpost/:filename - Blogpost löschen (JWT-geschützt)
-app.delete('/blogpost/:filename', authenticateToken, requireAdmin, (req, res) => {
+// DELETE /blogpost/:filename - Blogpost löschen (JWT-geschützt, Datenbank)
+app.delete('/blogpost/:filename', authenticateToken, requireAdmin, async (req, res) => {
   const fileName = req.params.filename;
-  const filePath = join(__dirname, '..', 'posts', fileName);
 
-  // Prüfen ob Datei existiert
-  readFile(filePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error('Fehler beim Lesen der Datei:', err);
+  try {
+    const deleted = await DatabaseService.deletePost(fileName, req.user.username);
+    
+    if (!deleted) {
       return res.status(404).json({ error: 'Blogpost nicht gefunden' });
     }
 
-    // Datei löschen
-    unlink(filePath, (unlinkErr) => {
-      if (unlinkErr) {
-        console.error('Fehler beim Löschen der Datei:', unlinkErr);
-        return res.status(500).json({ error: 'Fehler beim Löschen des Blogposts' });
-      }
-
-      // View-Count auch entfernen
-      delete postViews[fileName];
-
-      // Auch zugehörige Kommentare löschen
-      const commentsFileName = fileName.replace('.json', '_comments.json');
-      const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
-      unlink(commentsFilePath, (commentsErr) => {
-        // Ignoriere Fehler falls Kommentardatei nicht existiert
-        if (commentsErr && commentsErr.code !== 'ENOENT') {
-          console.warn('Warnung: Kommentardatei konnte nicht gelöscht werden:', commentsErr.message);
-        }
-      });
-
-      console.log(`🗑️ Blogpost gelöscht von ${req.user.username}: ${fileName}`);
-      res.json({ message: 'Blogpost erfolgreich gelöscht', file: fileName });
-    });
-  });
+    console.log(`🗑️ Blogpost gelöscht von ${req.user.username}: ${fileName}`);
+    res.json({ message: 'Blogpost erfolgreich gelöscht', file: fileName });
+    
+  } catch (error) {
+    console.error('Fehler beim Löschen des Posts:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen des Blogposts' });
+  }
 });
 
-// POST /comments/:postFilename - Neuen Kommentar hinzufügen
-app.post('/comments/:postFilename', (req, res) => {
+// POST /comments/:postFilename - Neuen Kommentar hinzufügen (Datenbank)
+app.post('/comments/:postFilename', async (req, res) => {
   const postFilename = req.params.postFilename;
   const { username, text } = req.body;
 
@@ -587,120 +505,50 @@ app.post('/comments/:postFilename', (req, res) => {
     return res.status(400).json({ error: 'Kommentar ist zu lang (maximal 1000 Zeichen)' });
   }
 
-  // XSS-Schutz: HTML-Tags entfernen/escapen
-  function sanitizeText(input) {
-    return input
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;');
-  }
-
-  const newComment = {
-    id: Date.now().toString(),
-    username: sanitizeText(username || 'Anonym'),
-    text: sanitizeText(text.trim()),
-    date: new Date().toISOString(),
-    ip: req.ip || req.connection.remoteAddress // Für Moderation
-  };
-
-  // Kommentardatei-Pfad bestimmen
-  const commentsFileName = postFilename.replace('.json', '_comments.json');
-  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
-
-  // Bestehende Kommentare laden oder leeres Array erstellen
-  readFile(commentsFilePath, 'utf8', (err, data) => {
-    let comments = [];
-    
-    if (!err) {
-      try {
-        comments = JSON.parse(data);
-      } catch (parseErr) {
-        console.error('Fehler beim Parsen der Kommentardatei:', parseErr);
-        comments = [];
-      }
-    }
-
-    // Neuen Kommentar hinzufügen
-    comments.push(newComment);
-
-    // Kommentare-Verzeichnis erstellen falls nötig
-    mkdir(dirname(commentsFilePath), { recursive: true }, (mkdirErr) => {
-      if (mkdirErr) {
-        console.error('Fehler beim Erstellen des Kommentare-Ordners:', mkdirErr);
-        return res.status(500).json({ error: 'Fehler beim Speichern des Kommentars' });
-      }
-
-      // Kommentare speichern
-      writeFile(commentsFilePath, JSON.stringify(comments, null, 2), (writeErr) => {
-        if (writeErr) {
-          console.error('Fehler beim Speichern der Kommentare:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Speichern des Kommentars' });
-        }
-
-        console.log(`💬 Neuer Kommentar für ${postFilename} von ${newComment.username}`);
-        res.status(201).json({ 
-          message: 'Kommentar erfolgreich hinzugefügt',
-          comment: newComment
-        });
-      });
+  try {
+    const result = await DatabaseService.addComment(postFilename, {
+      username,
+      text: text.trim(),
+      ipAddress: req.ip || req.connection.remoteAddress
     });
-  });
+
+    console.log(`💬 Neuer Kommentar für ${postFilename} von ${result.comment.username}`);
+    res.status(201).json({ 
+      message: 'Kommentar erfolgreich hinzugefügt',
+      comment: result.comment
+    });
+    
+  } catch (error) {
+    console.error('Fehler beim Hinzufügen des Kommentars:', error);
+    res.status(500).json({ error: 'Fehler beim Speichern des Kommentars' });
+  }
 });
 
-// DELETE /comments/:postFilename/:commentId - Kommentar löschen (JWT-geschützt)
-app.delete('/comments/:postFilename/:commentId', authenticateToken, requireAdmin, (req, res) => {
-  const postFilename = req.params.postFilename;
-  const commentId = req.params.commentId;
+// DELETE /comments/:postFilename/:commentId - Kommentar löschen (JWT-geschützt, Datenbank)
+app.delete('/comments/:postFilename/:commentId', authenticateToken, requireAdmin, async (req, res) => {
+  const { postFilename, commentId } = req.params;
   
-  const commentsFileName = postFilename.replace('.json', '_comments.json');
-  const commentsFilePath = join(__dirname, '..', 'comments', commentsFileName);
-
-  // Kommentare laden
-  readFile(commentsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Keine Kommentare gefunden' });
-      }
-      console.error('Fehler beim Lesen der Kommentardatei:', err);
-      return res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
+  try {
+    const deleted = await DatabaseService.deleteComment(commentId, postFilename);
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Kommentar nicht gefunden' });
     }
 
-    try {
-      let comments = JSON.parse(data);
-      const originalLength = comments.length;
-      
-      // Kommentar mit der angegebenen ID entfernen
-      comments = comments.filter(comment => comment.id !== commentId);
-      
-      if (comments.length === originalLength) {
-        return res.status(404).json({ error: 'Kommentar nicht gefunden' });
-      }
-
-      // Aktualisierte Kommentare speichern
-      writeFile(commentsFilePath, JSON.stringify(comments, null, 2), (writeErr) => {
-        if (writeErr) {
-          console.error('Fehler beim Speichern der Kommentare:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Löschen des Kommentars' });
-        }
-
-        console.log(`🗑️ Kommentar gelöscht von ${req.user.username}: ${commentId} in ${postFilename}`);
-        res.json({ 
-          message: 'Kommentar erfolgreich gelöscht',
-          commentId: commentId
-        });
-      });
-      
-    } catch (parseErr) {
-      console.error('Fehler beim Parsen der Kommentardatei:', parseErr);
-      res.status(500).json({ error: 'Fehler beim Verarbeiten der Kommentare' });
-    }
-  });
+    console.log(`🗑️ Kommentar gelöscht von ${req.user.username}: ${commentId} in ${postFilename}`);
+    res.json({ 
+      message: 'Kommentar erfolgreich gelöscht',
+      commentId: commentId
+    });
+    
+  } catch (error) {
+    console.error('Fehler beim Löschen des Kommentars:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen des Kommentars' });
+  }
 });
 
-// POST /upload/image - Bild-Upload (JWT-geschützt)
-app.post('/upload/image', authenticateToken, requireAdmin, (req, res) => {
+// POST /upload/image - Bild-Upload (JWT-geschützt, mit Datenbank-Tracking)
+app.post('/upload/image', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { image, filename } = req.body;
     
@@ -732,7 +580,7 @@ app.post('/upload/image', authenticateToken, requireAdmin, (req, res) => {
     
     // Upload-Ordner erstellen falls nötig
     const uploadDir = join(__dirname, '..', 'assets', 'uploads');
-    mkdir(uploadDir, { recursive: true }, (mkdirErr) => {
+    mkdir(uploadDir, { recursive: true }, async (mkdirErr) => {
       if (mkdirErr) {
         console.error('Fehler beim Erstellen des Upload-Ordners:', mkdirErr);
         return res.status(500).json({ error: 'Fehler beim Erstellen des Upload-Ordners' });
@@ -740,10 +588,30 @@ app.post('/upload/image', authenticateToken, requireAdmin, (req, res) => {
       
       // Bild-Datei schreiben
       const imagePath = join(uploadDir, uniqueFilename);
-      writeFile(imagePath, base64Data, 'base64', (writeErr) => {
+      writeFile(imagePath, base64Data, 'base64', async (writeErr) => {
         if (writeErr) {
           console.error('Fehler beim Speichern des Bildes:', writeErr);
           return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+        }
+        
+        try {
+          // Dateisize ermitteln
+          const { stat } = await import('fs/promises');
+          const stats = await stat(imagePath);
+          
+          // Media-Eintrag in Datenbank erstellen
+          await DatabaseService.addMedia({
+            filename: uniqueFilename,
+            original_name: filename,
+            file_size: stats.size,
+            mime_type: 'image/' + (sanitizedFilename.split('.').pop() || 'jpeg'),
+            uploaded_by: req.user.username,
+            upload_path: `/assets/uploads/${uniqueFilename}`
+          });
+          
+        } catch (dbError) {
+          console.error('Fehler beim Tracking des Uploads:', dbError);
+          // Nicht kritisch, Upload war erfolgreich
         }
         
         const imageUrl = `/assets/uploads/${uniqueFilename}`;
@@ -764,23 +632,39 @@ app.post('/upload/image', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// DELETE /assets/uploads/:filename - Bild löschen (JWT-geschützt)
-app.delete('/assets/uploads/:filename', authenticateToken, requireAdmin, (req, res) => {
+// DELETE /assets/uploads/:filename - Bild löschen (JWT-geschützt, mit Datenbank-Update)
+app.delete('/assets/uploads/:filename', authenticateToken, requireAdmin, async (req, res) => {
   const filename = req.params.filename;
   const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
   
-  unlink(imagePath, (err) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Bild nicht gefunden' });
-      }
-      console.error('Fehler beim Löschen des Bildes:', err);
-      return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
-    }
+  try {
+    // Aus Datenbank entfernen
+    await DatabaseService.deleteMedia(filename);
     
-    console.log(`🗑️ Bild gelöscht von ${req.user.username}: ${filename}`);
-    res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
-  });
+    // Datei vom Dateisystem löschen
+    unlink(imagePath, (err) => {
+      if (err) {
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: 'Bild nicht gefunden' });
+        }
+        console.error('Fehler beim Löschen des Bildes:', err);
+        return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
+      }
+      
+      console.log(`🗑️ Bild gelöscht von ${req.user.username}: ${filename}`);
+      res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
+    });
+    
+  } catch (error) {
+    console.error('Fehler beim Löschen des Media-Eintrags:', error);
+    // Trotzdem versuchen, die Datei zu löschen
+    unlink(imagePath, (err) => {
+      if (err && err.code !== 'ENOENT') {
+        return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
+      }
+      res.json({ message: 'Bild gelöscht (Datenbank-Fehler)', filename: filename });
+    });
+  }
 });
 
 // POST /upload/simple - Einfacher Bild-Upload ohne Komprimierung (JWT-geschützt)
