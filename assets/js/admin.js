@@ -35,11 +35,13 @@ async function checkAdminStatus() {
             isAdminLoggedIn = true;
             currentUser = result.data.user;
             currentJwtToken = getJwtTokenFromCookie(); // Token aus Cookie lesen
-            console.log('✅ Admin-Session aktiv:', currentUser.username);
+            console.log('Admin session active:', currentUser.username);
             return true;
+        } else {
+            console.log('Admin status check failed:', result.data?.error || 'Unknown error');
         }
     } catch (error) {
-        console.warn('⚠️ Admin-Status-Prüfung fehlgeschlagen:', error);
+        console.warn('Admin status check failed:', error);
     }
     
     isAdminLoggedIn = false;
@@ -80,7 +82,7 @@ async function adminLogin(reloadPage = true) {
             currentUser = result.data.user;
             currentJwtToken = result.data.token; // Token aus Response speichern
             
-            console.log('✅ Admin-Login erfolgreich:', currentUser.username);
+            console.log('Admin-Login erfolgreich:', currentUser.username);
             updateNavigationVisibility();
             
             if (reloadPage) {
@@ -110,7 +112,7 @@ async function adminLogout() {
             }
         });
     } catch (error) {
-        console.warn('⚠️ Logout-Request fehlgeschlagen:', error);
+        console.warn('Logout-Request fehlgeschlagen:', error);
     }
     
     // Lokale Variablen zurücksetzen
@@ -204,7 +206,7 @@ function createAdminToolbar() {
         id: 'admin-toolbar',
         cssText: ADMIN_STYLES.toolbar
     }, `
-        <span>👑 Admin-Modus aktiv${userDisplay}</span>
+        <span>Admin-Modus aktiv${userDisplay}</span>
         <button onclick="adminLogout()" style="${ADMIN_STYLES.logoutButton}">
             Logout
         </button>
@@ -227,7 +229,7 @@ function createAdminLoginButton() {
         id: 'admin-login-btn',
         cssText: ADMIN_STYLES.loginButton,
         title: 'Admin Login (JWT)'
-    }, '👑');
+    }, 'Admin');
     
     // Event-Listener hinzufügen
     loginBtn.onclick = () => adminLogin(true);
@@ -253,11 +255,11 @@ async function initializeCreatePage() {
     if (await checkAdminStatus()) {
         // Admin ist eingeloggt - zeige Create-Formular
         showElement('create-content');
-        console.log('✅ Admin-Status bestätigt - Create-Formular wird angezeigt');
+        console.log('Admin-Status bestätigt - Create-Formular wird angezeigt');
     } else {
         // Kein Admin - zeige Warnung
         showElement('admin-required');
-        console.log('⚠️ Kein Admin-Status - Anmeldung erforderlich');
+        console.log('Kein Admin-Status - Anmeldung erforderlich');
     }
     
     // Navigation-Sichtbarkeit aktualisieren
@@ -275,7 +277,7 @@ async function addReadPostAdminControls() {
         if (adminControls) {
             adminControls.innerHTML = `
                 <button onclick="deletePostAndRedirect('${postFilename}')" class="btn btn-danger" style="${ADMIN_STYLES.deleteButton}">
-                    🗑️ Diesen Post löschen (Admin: ${currentUser?.username || 'JWT'})
+                    Diesen Post löschen (Admin: ${currentUser?.username || 'JWT'})
                 </button>
             `;
         }
@@ -293,21 +295,21 @@ async function deletePostAndRedirect(filename) {
 
 // Admin-System initialisieren (JWT-basiert)
 async function initializeAdminSystem() {
-    console.log('🔐 Initialisiere JWT-basiertes Admin-System...');
+    console.log('Initialisiere JWT-basiertes Admin-System...');
     
     // JWT-Status prüfen
     await checkAdminStatus();
     updateNavigationVisibility();
     
     if (isAdminLoggedIn) {
-        console.log('✅ Admin eingeloggt:', currentUser?.username);
+        console.log('Admin eingeloggt:', currentUser?.username);
         createAdminToolbar();
         // Kommentare mit Admin-Funktionen neu laden falls sie bereits angezeigt werden
         if (typeof initializeCommentsSystem === 'function') {
             setTimeout(initializeCommentsSystem, 100);
         }
     } else {
-        console.log('ℹ️ Kein Admin eingeloggt - Login-Button anzeigen');
+        console.log('Kein Admin eingeloggt - Login-Button anzeigen');
         createAdminLoginButton();
     }
     
@@ -316,7 +318,7 @@ async function initializeAdminSystem() {
         setInterval(async () => {
             const refreshed = await refreshTokenIfNeeded();
             if (!refreshed && currentJwtToken) {
-                console.log('🔄 Token-Refresh übersprungen - Token noch gültig');
+                console.log('Token-Refresh übersprungen - Token noch gültig');
             }
         }, 30 * 60 * 1000); // 30 Minuten
     }
@@ -337,11 +339,11 @@ async function refreshTokenIfNeeded() {
         
         if (result.success && result.data && result.data.success) {
             currentJwtToken = result.data.token;
-            console.log('🔄 JWT-Token erfolgreich erneuert');
+            console.log('JWT-Token erfolgreich erneuert');
             return true;
         }
     } catch (error) {
-        console.warn('⚠️ Token-Refresh fehlgeschlagen:', error);
+        console.warn('Token-Refresh fehlgeschlagen:', error);
     }
     
     return false;
@@ -493,7 +495,22 @@ async function makeApiRequest(url, options = {}) {
     
     try {
         const response = await fetch(url, mergedOptions);
-        const result = await response.json();
+        
+        // Überprüfen ob die Antwort JSON ist
+        const contentType = response.headers.get('content-type');
+        let result;
+        
+        if (contentType && contentType.includes('application/json')) {
+            result = await response.json();
+        } else {
+            // Fallback für nicht-JSON-Antworten
+            const text = await response.text();
+            console.warn(`Non-JSON response from ${url}:`, text);
+            result = { 
+                error: 'Server returned non-JSON response', 
+                response: text 
+            };
+        }
         
         return {
             success: response.ok,

@@ -1,7 +1,7 @@
 // AI-Unterstützung für den Blog mit Google Gemini
 // Kostenlose AI-Integration für Schreibhilfe und Content-Verbesserung
 
-console.log('🤖 AI-Assistent-Modul geladen');
+console.log('AI-Assistent-Modul geladen');
 
 // Gemini API Konfiguration
 const GEMINI_CONFIG = {
@@ -42,7 +42,7 @@ function showApiKeySetup() {
     
     if (newKey && newKey.trim() !== '') {
         saveGeminiApiKey(newKey.trim());
-        showNotification('✅ Gemini API-Schlüssel gespeichert! AI-Funktionen sind jetzt verfügbar.', 'success');
+        showNotification('Gemini API-Schlüssel gespeichert! AI-Funktionen sind jetzt verfügbar.', 'success');
         return true;
     }
     return false;
@@ -83,7 +83,7 @@ async function callGeminiAPI(prompt, systemInstruction = '') {
     };
     
     try {
-        console.log('🤖 Sende Anfrage an Gemini API...');
+        console.log('Sende Anfrage an Gemini API...');
         
         const response = await fetch(url, {
             method: 'POST',
@@ -105,20 +105,20 @@ async function callGeminiAPI(prompt, systemInstruction = '') {
         }
         
         const aiResponse = data.candidates[0].content.parts[0].text;
-        console.log('✅ Gemini API-Antwort erhalten');
+        console.log('Gemini API-Antwort erhalten');
         
         return aiResponse;
     } catch (error) {
-        console.error('❌ Gemini API Fehler:', error);
+        console.error('Gemini API Fehler:', error);
         
         // Hilfreiche Fehlermeldungen
         if (error.message.includes('API_KEY_INVALID')) {
-            showNotification('❌ Ungültiger API-Schlüssel. Bitte überprüfe deinen Gemini API-Schlüssel.', 'error');
+            showNotification('Ungültiger API-Schlüssel. Bitte überprüfe deinen Gemini API-Schlüssel.', 'error');
             showApiKeySetup();
         } else if (error.message.includes('QUOTA_EXCEEDED')) {
-            showNotification('❌ API-Limit erreicht. Versuche es später erneut.', 'error');
+            showNotification('API-Limit erreicht. Versuche es später erneut.', 'error');
         } else {
-            showNotification(`❌ AI-Fehler: ${error.message}`, 'error');
+            showNotification(`AI-Fehler: ${error.message}`, 'error');
         }
         
         throw error;
@@ -167,7 +167,7 @@ Regeln:
         }
         
         updatePreview();
-        showNotification('✨ Text wurde von AI verbessert!', 'success');
+        showNotification('Text wurde von AI verbessert!', 'success');
         
     } catch (error) {
         console.error('Fehler beim Textverbessern:', error);
@@ -221,7 +221,7 @@ Regeln:
             updatePreview();
         }
         
-        showNotification('🏷️ Tags wurden automatisch generiert!', 'success');
+        showNotification('Tags wurden automatisch generiert!', 'success');
         
     } catch (error) {
         console.error('Fehler beim Tag-Generieren:', error);
@@ -266,7 +266,7 @@ Regeln:
         // Zusammenfassung in einem Modal oder Alert anzeigen
         const summaryModal = `
             <div style="max-width: 500px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <h4 style="color: #2c3e50; margin-bottom: 15px;">📄 AI-Zusammenfassung</h4>
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">AI-Zusammenfassung</h4>
                 <p style="line-height: 1.6; color: #555;">${summary}</p>
                 <div style="margin-top: 20px; text-align: right;">
                     <button onclick="copyToClipboard('${summary.replace(/'/g, "\\'")}'); closeModal();" class="btn btn-primary btn-sm">
@@ -278,7 +278,7 @@ Regeln:
         `;
         
         showModal(summaryModal);
-        showNotification('📄 Zusammenfassung wurde erstellt!', 'success');
+        showNotification('Zusammenfassung wurde erstellt!', 'success');
         
     } catch (error) {
         console.error('Fehler beim Zusammenfassen:', error);
@@ -334,7 +334,7 @@ Regeln:
         
         const titleModal = `
             <div style="max-width: 600px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <h4 style="color: #2c3e50; margin-bottom: 15px;">💡 AI-Titel-Vorschläge</h4>
+                <h4 style="color: #2c3e50; margin-bottom: 15px;">AI-Titel-Vorschläge</h4>
                 <p style="color: #666; margin-bottom: 20px;">Klicke auf einen Titel, um ihn zu übernehmen:</p>
                 ${titlesHtml}
                 <div style="margin-top: 20px; text-align: right;">
@@ -344,7 +344,7 @@ Regeln:
         `;
         
         showModal(titleModal);
-        showNotification('💡 Titel-Vorschläge wurden generiert!', 'success');
+        showNotification('Titel-Vorschläge wurden generiert!', 'success');
         
     } catch (error) {
         console.error('Fehler beim Titel-Generieren:', error);
@@ -364,7 +364,7 @@ function selectTitle(title) {
     if (titleInput) {
         titleInput.value = title;
         updatePreview();
-        showNotification('✅ Titel übernommen!', 'success');
+        showNotification('Titel übernommen!', 'success');
     }
     closeModal();
 }
@@ -372,7 +372,7 @@ function selectTitle(title) {
 // Text in Zwischenablage kopieren
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
-        showNotification('📋 In Zwischenablage kopiert!', 'success');
+        showNotification('In Zwischenablage kopiert!', 'success');
     }).catch(err => {
         console.error('Fehler beim Kopieren:', err);
         // Fallback für ältere Browser
@@ -382,7 +382,7 @@ function copyToClipboard(text) {
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        showNotification('📋 In Zwischenablage kopiert!', 'success');
+        showNotification('In Zwischenablage kopiert!', 'success');
     });
 }
 
@@ -445,7 +445,7 @@ function updateAIButtons() {
 
 // AI-System initialisieren
 function initializeAISystem() {
-    console.log('🤖 Initialisiere AI-System...');
+    console.log('Initialisiere AI-System...');
     
     // API-Schlüssel laden
     loadGeminiApiKey();
@@ -453,7 +453,7 @@ function initializeAISystem() {
     // Button-Status aktualisieren
     updateAIButtons();
     
-    console.log('✅ AI-System initialisiert');
+    console.log('AI-System initialisiert');
 }
 
 // AI-System beim Laden der Seite initialisieren

@@ -367,8 +367,11 @@ app.post('/auth/verify', (req, res) => {
         
         if (!token) {
             return res.status(401).json({ 
-                valid: false,
-                error: 'Kein Token gefunden' 
+                success: false,
+                data: {
+                    valid: false,
+                    error: 'Kein Token gefunden' 
+                }
             });
         }
         
@@ -376,25 +379,34 @@ app.post('/auth/verify', (req, res) => {
         
         if (!user) {
             return res.status(403).json({ 
-                valid: false,
-                error: 'Token ungültig oder abgelaufen' 
+                success: false,
+                data: {
+                    valid: false,
+                    error: 'Token ungültig oder abgelaufen' 
+                }
             });
         }
         
         res.json({
-            valid: true,
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role
+            success: true,
+            data: {
+                valid: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    role: user.role
+                }
             }
         });
         
     } catch (error) {
         console.error('Token verification error:', error);
         res.status(500).json({ 
-            valid: false,
-            error: 'Interner Serverfehler' 
+            success: false,
+            data: {
+                valid: false,
+                error: 'Interner Serverfehler' 
+            }
         });
     }
 });

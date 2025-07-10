@@ -24,7 +24,7 @@ const JWT_CONFIG = {
 function getJWTSecret() {
     // 1. Priorität: Environment-Variable (Production)
     if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) {
-        console.log('✅ JWT-Secret aus Environment-Variable geladen');
+        console.log('JWT-Secret aus Environment-Variable geladen');
         return process.env.JWT_SECRET;
     }
     
@@ -34,17 +34,17 @@ function getJWTSecret() {
         if (existsSync(configPath)) {
             const existingKey = readFileSync(configPath, 'utf8').trim();
             if (existingKey.length >= 32) {
-                console.log('⚠️ JWT-Secret aus Datei geladen (Development)');
+                console.log('JWT-Secret aus Datei geladen (Development)');
                 return existingKey;
             }
         }
     } catch (error) {
-        console.warn('⚠️ Konnte JWT-Secret-Datei nicht lesen');
+        console.warn('Konnte JWT-Secret-Datei nicht lesen');
     }
     
     // 3. Letzter Fallback: Neuen Secret generieren und warnen
-    console.warn('🚨 WARNUNG: Kein JWT-Secret gefunden! Generiere temporären Secret...');
-    console.warn('🔧 Setzen Sie JWT_SECRET in der .env für Production!');
+    console.warn('WARNUNG: Kein JWT-Secret gefunden! Generiere temporären Secret...');
+    console.warn('Setzen Sie JWT_SECRET in der .env für Production!');
     
     const tempSecret = crypto.randomBytes(64).toString('hex');
     
@@ -56,9 +56,9 @@ function getJWTSecret() {
                 mkdirSync(configDir, { recursive: true });
             }
             writeFileSync(configPath, tempSecret, 'utf8');
-            console.log('� Temporärer JWT-Secret für Development gespeichert');
+            console.log('Temporärer JWT-Secret für Development gespeichert');
         } catch (error) {
-            console.warn('⚠️ Konnte temporären JWT-Secret nicht speichern');
+            console.warn('Konnte temporären JWT-Secret nicht speichern');
         }
     }
     
@@ -91,7 +91,7 @@ export function verifyToken(token) {
             audience: JWT_CONFIG.AUDIENCE
         });
     } catch (error) {
-        console.error('❌ JWT-Verifikation fehlgeschlagen:', error.message);
+        console.error('JWT-Verifikation fehlgeschlagen:', error.message);
         return null;
     }
 }
@@ -178,7 +178,7 @@ export async function hashPassword(password) {
         const saltRounds = 12; // Höhere Sicherheit
         return await bcrypt.hash(password, saltRounds);
     } catch (error) {
-        console.error('❌ Fehler beim Passwort-Hashing:', error);
+        console.error('Fehler beim Passwort-Hashing:', error);
         throw error;
     }
 }
