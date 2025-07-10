@@ -405,8 +405,7 @@ const ADMIN_CONFIG = {
     // localStorage Keys
     STORAGE_KEYS: {
         ADMIN_TOKEN: 'blog_admin_token',
-        ADMIN_EXPIRY: 'blog_admin_expiry',
-        PASSWORD_HASH: 'blog_admin_password_hash'
+        ADMIN_EXPIRY: 'blog_admin_expiry'
     }
 };
 

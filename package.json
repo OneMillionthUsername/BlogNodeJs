@@ -9,6 +9,7 @@
     "dev": "NODE_ENV=development node server/app.js",
     "production": "NODE_ENV=production PLESK_ENV=true node server/app.js",
     "generate-hash": "node generate-hash.js",
+    "hash-password": "node scripts/hash-password.js",
     "migrate": "node migrate.js",
     "test": "node --test"
   },

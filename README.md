@@ -48,7 +48,6 @@ PLESK_ENV=true
 PORT=8080
 DOMAIN=your-domain.com
 JWT_SECRET=your-jwt-secret
-ADMIN_PASSWORD_HASH=your-bcrypt-hash
 DB_HOST=localhost
 DB_USER=your-db-user
 DB_PASSWORD=your-db-password
@@ -63,9 +62,10 @@ DB_NAME=your-database
 ## Development
 
 ### Admin System
-Default admin credentials (change immediately):
-- Username: admin
-- Password: Generate hash with `node generate-hash.js`
+Admin users must be created manually for security:
+1. Generate password hash: `npm run hash-password`
+2. Create admin user with SQL: `sql/create_admin_users.sql`
+3. See `docs/ADMIN_SECURITY.md` for detailed instructions
 
 ### SSL Certificates
 For HTTPS development:

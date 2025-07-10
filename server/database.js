@@ -630,6 +630,104 @@ export const DatabaseService = {
         } finally {
             if (conn) conn.release();
         }
+    },
+
+    // Admin-Benutzer-Verwaltung
+    async getAdminByUsername(username) {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            const result = await conn.query(
+                'SELECT * FROM admins WHERE username = ? LIMIT 1',
+                [username]
+            );
+            return result.length > 0 ? result[0] : null;
+        } finally {
+            if (conn) conn.release();
+        }
+    },
+
+    async updateAdminLoginSuccess(adminId) {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            await conn.query(
+                'UPDATE admins SET last_login = NOW(), login_attempts = 0, locked_until = NULL WHERE id = ?',
+                [adminId]
+            );
+        } finally {
+            if (conn) conn.release();
+        }
+    },
+
+    async updateAdminLoginFailure(adminId) {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            
+            // Aktuelle Login-Attempts abrufen
+            const result = await conn.query(
+                'SELECT login_attempts FROM admins WHERE id = ?',
+                [adminId]
+            );
+            
+            if (result.length > 0) {
+                const currentAttempts = result[0].login_attempts + 1;
+                let locked_until = null;
+                
+                // Account nach 5 fehlgeschlagenen Versuchen für 30 Minuten sperren
+                if (currentAttempts >= 5) {
+                    locked_until = new Date(Date.now() + 30 * 60 * 1000); // 30 Minuten
+                }
+                
+                await conn.query(
+                    'UPDATE admins SET login_attempts = ?, locked_until = ? WHERE id = ?',
+                    [currentAttempts, locked_until, adminId]
+                );
+            }
+        } finally {
+            if (conn) conn.release();
+        }
+    },
+
+    async createAdmin(username, password_hash, email = null, full_name = null, role = 'admin') {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            const result = await conn.query(
+                'INSERT INTO admins (username, password_hash, email, full_name, role) VALUES (?, ?, ?, ?, ?)',
+                [username, password_hash, email, full_name, role]
+            );
+            return result.insertId;
+        } finally {
+            if (conn) conn.release();
+        }
+    },
+
+    async getAllAdmins() {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            const result = await conn.query(
+                'SELECT id, username, email, full_name, role, active, last_login, login_attempts, locked_until, created_at FROM admins ORDER BY created_at DESC'
+            );
+            return result;
+        } finally {
+            if (conn) conn.release();
+        }
+    },
+
+    async updateAdminStatus(adminId, active) {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            await conn.query(
+                'UPDATE admins SET active = ? WHERE id = ?',
+                [active, adminId]
+            );
+        } finally {
+            if (conn) conn.release();
+        }
     }
 };
 

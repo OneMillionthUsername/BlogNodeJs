@@ -112,33 +112,62 @@ export function extractTokenFromRequest(req) {
     return null;
 }
 
-// Admin-Login validieren (temporär mit Klartext für Debugging)
+// Admin-Login validieren (Datenbank-basiert)
 export async function validateAdminLogin(username, password) {
-    console.log('🔍 Login-Versuch:', { username, password: password ? '[VORHANDEN]' : '[LEER]' });
+    console.log('Login attempt for username:', username);
     
-    if (username !== ADMIN_CONFIG.username) {
-        console.log('❌ Ungültiger Benutzername:', username, 'erwartet:', ADMIN_CONFIG.username);
+    if (!username || !password) {
+        console.log('Missing username or password');
         return null;
     }
     
     try {
-        // Temporär: Direkter String-Vergleich für Debugging
-        const isValidPassword = password === ADMIN_CONFIG.passwordHash;
-        console.log('📝 Passwort-Vergleich (Klartext):', { eingegeben: password, erwartet: ADMIN_CONFIG.passwordHash, gueltig: isValidPassword });
+        // Importiere DatabaseService zur Laufzeit um zirkuläre Abhängigkeiten zu vermeiden
+        const { DatabaseService } = await import('./database.js');
+        
+        // Admin-Benutzer aus Datenbank laden
+        const admin = await DatabaseService.getAdminByUsername(username);
+        if (!admin) {
+            console.log('Admin user not found:', username);
+            return null;
+        }
+        
+        // Prüfe ob Account gesperrt ist
+        if (!admin.active) {
+            console.log('Admin account is disabled:', username);
+            return null;
+        }
+        
+        // Prüfe ob Account temporär gesperrt ist
+        if (admin.locked_until && new Date() < new Date(admin.locked_until)) {
+            console.log('Admin account is temporarily locked:', username);
+            return null;
+        }
+        
+        // Passwort mit Hash vergleichen
+        const isValidPassword = await bcrypt.compare(password, admin.password_hash);
         
         if (isValidPassword) {
-            console.log('✅ Admin-Login erfolgreich');
+            // Login-Attempts zurücksetzen bei erfolgreichem Login
+            await DatabaseService.updateAdminLoginSuccess(admin.id);
+            
+            console.log('Admin login successful:', username);
             return {
-                id: ADMIN_CONFIG.id,
-                username: ADMIN_CONFIG.username,
-                role: ADMIN_CONFIG.role
+                id: admin.id,
+                username: admin.username,
+                role: admin.role,
+                email: admin.email,
+                full_name: admin.full_name
             };
         } else {
-            console.log('❌ Ungültiges Passwort für Admin');
+            // Fehlgeschlagene Login-Versuche erhöhen
+            await DatabaseService.updateAdminLoginFailure(admin.id);
+            
+            console.log('Invalid password for admin:', username);
             return null;
         }
     } catch (error) {
-        console.error('❌ Fehler bei Passwort-Validierung:', error);
+        console.error('Error during admin login validation:', error);
         return null;
     }
 }
@@ -223,14 +252,7 @@ export function getJWTConfig() {
     };
 }
 
-// Admin-Benutzer-Konfiguration (in Produktion aus Datenbank)
-const ADMIN_CONFIG = {
-    username: 'admin',
-    // Temporär: Klartext-Passwort für Debugging (NICHT für Produktion!)
-    passwordHash: 'admin123',
-    role: 'admin',
-    id: 'admin-001'
-};
-
-console.log('🔐 JWT-Authentifizierungs-Modul geladen');
-console.log('⚙️ Konfiguration:', getJWTConfig());
+console.log('JWT authentication module loaded');
+console.log('Configuration:', getJWTConfig());
+console.log('Admin users must be created manually in the database');
+console.log('Use SQL scripts to create admin users with bcrypt hashed passwords');
