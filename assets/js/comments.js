@@ -94,20 +94,12 @@ async function deleteComment(postFilename, commentId) {
     try {
         console.log(`🗑️ Lösche Kommentar: ${commentId} aus Post: ${postFilename}`);
         
-        // JWT-Token für Authentifizierung holen
-        const token = (typeof currentJwtToken !== 'undefined' && currentJwtToken) || 
-                     getJwtTokenFromCookie();
-        
-        const headers = {};
-        
-        // Authorization Header hinzufügen falls Token verfügbar
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
         const response = await fetch(`/comments/${postFilename}/${commentId}`, {
             method: 'DELETE',
-            headers: headers
+            credentials: 'include', // HTTP-only Cookies verwenden
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
         
         const result = await response.json();

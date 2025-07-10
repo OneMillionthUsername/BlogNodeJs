@@ -3,38 +3,29 @@
 
 // Admin-Status Variable (muss vor allen Funktionen stehen)
 let isAdminLoggedIn = false;
-let currentJwtToken = null;
 let currentUser = null;
 
-// API-Request mit JWT-Authorization Header
+// API-Request mit Cookies (keine Client-Side Token-Logik)
 async function makeApiRequestWithAuth(url, options = {}) {
-    const token = currentJwtToken || getJwtTokenFromCookie();
-    
-    if (token) {
-        options.headers = {
-            ...options.headers,
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        };
-    }
+    options.credentials = 'include'; // HTTP-only Cookies verwenden
+    options.headers = {
+        ...options.headers,
+        'Content-Type': 'application/json'
+    };
     
     return await makeApiRequest(url, options);
 }
 
-// Admin-Status über JWT-Token prüfen
+// Admin-Status über HTTP-only Cookie prüfen
 async function checkAdminStatus() {
     try {
-        const result = await makeApiRequest('/auth/verify', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+        const result = await makeApiRequestWithAuth('/auth/verify', {
+            method: 'POST'
         });
         
         if (result.success && result.data && result.data.valid) {
             isAdminLoggedIn = true;
             currentUser = result.data.user;
-            currentJwtToken = getJwtTokenFromCookie(); // Token aus Cookie lesen
             console.log('Admin session active:', currentUser.username);
             return true;
         } else {
@@ -46,11 +37,10 @@ async function checkAdminStatus() {
     
     isAdminLoggedIn = false;
     currentUser = null;
-    currentJwtToken = null;
     return false;
 }
 
-// JWT-basiertes Admin Login
+// Cookie-basiertes Admin Login
 async function adminLogin(reloadPage = true) {
     const username = prompt('Benutzername:') || 'admin';
     const password = prompt('Admin-Passwort eingeben:');
@@ -62,11 +52,8 @@ async function adminLogin(reloadPage = true) {
     console.log('Attempting login with:', username); // Debug output
     
     try {
-        const result = await makeApiRequest('/auth/login', {
+        const result = await makeApiRequestWithAuth('/auth/login', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
             body: JSON.stringify({
                 username: username,
                 password: password
@@ -80,7 +67,6 @@ async function adminLogin(reloadPage = true) {
         if (result.success && result.data && result.data.success) {
             isAdminLoggedIn = true;
             currentUser = result.data.user;
-            currentJwtToken = result.data.token; // Token aus Response speichern
             
             console.log('Admin-Login erfolgreich:', currentUser.username);
             updateNavigationVisibility();
@@ -102,14 +88,11 @@ async function adminLogin(reloadPage = true) {
     }
 }
 
-// JWT-basiertes Admin Logout
+// Cookie-basiertes Admin Logout
 async function adminLogout() {
     try {
-        await makeApiRequest('/auth/logout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+        await makeApiRequestWithAuth('/auth/logout', {
+            method: 'POST'
         });
     } catch (error) {
         console.warn('Logout-Request fehlgeschlagen:', error);
@@ -118,7 +101,6 @@ async function adminLogout() {
     // Lokale Variablen zurücksetzen
     isAdminLoggedIn = false;
     currentUser = null;
-    currentJwtToken = null;
     
     updateNavigationVisibility();
     reloadPageWithDelay(); // Verzögerter Reload für bessere UX
@@ -295,9 +277,9 @@ async function deletePostAndRedirect(filename) {
 
 // Admin-System initialisieren (JWT-basiert)
 async function initializeAdminSystem() {
-    console.log('Initialisiere JWT-basiertes Admin-System...');
+    console.log('Initialisiere Cookie-basiertes Admin-System...');
     
-    // JWT-Status prüfen
+    // Admin-Status prüfen
     await checkAdminStatus();
     updateNavigationVisibility();
     
@@ -312,41 +294,6 @@ async function initializeAdminSystem() {
         console.log('Kein Admin eingeloggt - Login-Button anzeigen');
         createAdminLoginButton();
     }
-    
-    // Automatisches Token-Refresh alle 30 Minuten
-    if (isAdminLoggedIn) {
-        setInterval(async () => {
-            const refreshed = await refreshTokenIfNeeded();
-            if (!refreshed && currentJwtToken) {
-                console.log('Token-Refresh übersprungen - Token noch gültig');
-            }
-        }, 30 * 60 * 1000); // 30 Minuten
-    }
-}
-
-// JWT Token-Refresh (optional - automatische Verlängerung)
-async function refreshTokenIfNeeded() {
-    if (!currentJwtToken) return false;
-    
-    try {
-        const result = await makeApiRequest('/auth/refresh', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentJwtToken}`
-            }
-        });
-        
-        if (result.success && result.data && result.data.success) {
-            currentJwtToken = result.data.token;
-            console.log('JWT-Token erfolgreich erneuert');
-            return true;
-        }
-    } catch (error) {
-        console.warn('Token-Refresh fehlgeschlagen:', error);
-    }
-    
-    return false;
 }
 
 // UI-Element Sichtbarkeits-Utilities (zentralisiert)
@@ -395,20 +342,10 @@ window.checkAdminStatus = checkAdminStatus;
 
 // Konfiguration und Konstanten
 const ADMIN_CONFIG = {
-    // Token-Einstellungen
-    TOKEN_EXPIRY_HOURS: 24,
-    DEFAULT_PASSWORD_HASH: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', // admin123
-    
     // UI-Einstellungen
     TOOLBAR_HEIGHT: '50px',
     RELOAD_DELAY: 100,
-    ELEMENT_WAIT_TIMEOUT: 5000,
-    
-    // localStorage Keys
-    STORAGE_KEYS: {
-        ADMIN_TOKEN: 'blog_admin_token',
-        ADMIN_EXPIRY: 'blog_admin_expiry'
-    }
+    ELEMENT_WAIT_TIMEOUT: 5000
 };
 
 // CSS-Styles für Admin-UI (zentralisiert)
@@ -486,6 +423,7 @@ const ADMIN_MESSAGES = {
 // API-Utilities (zentralisiert)
 async function makeApiRequest(url, options = {}) {
     const defaultOptions = {
+        credentials: 'include', // HTTP-only Cookies automatisch senden
         headers: {
             'Content-Type': 'application/json'
         }

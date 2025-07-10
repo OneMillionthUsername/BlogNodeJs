@@ -46,7 +46,6 @@ import {
     validateAdminLogin, 
     authenticateToken, 
     requireAdmin,
-    refreshToken,
     extractTokenFromRequest
 } from './auth.js';
 
@@ -347,8 +346,7 @@ app.post('/auth/login', async (req, res) => {
                 id: user.id,
                 username: user.username,
                 role: user.role
-            },
-            token: token // Auch im Response für Frontend
+            }
         });
         
     } catch (error) {
@@ -407,50 +405,6 @@ app.post('/auth/verify', (req, res) => {
                 valid: false,
                 error: 'Interner Serverfehler' 
             }
-        });
-    }
-});
-
-// POST /auth/refresh - Token erneuern
-app.post('/auth/refresh', (req, res) => {
-    try {
-        const token = extractTokenFromRequest(req);
-        
-        if (!token) {
-            return res.status(401).json({ 
-                error: 'Kein Token für Refresh gefunden',
-                success: false 
-            });
-        }
-        
-        const newToken = refreshToken(token);
-        
-        if (!newToken) {
-            return res.status(403).json({ 
-                error: 'Token-Refresh fehlgeschlagen',
-                success: false 
-            });
-        }
-        
-        // Neuen Token als Cookie setzen
-        res.cookie('authToken', newToken, {
-            httpOnly: true,
-            secure: IS_PRODUCTION || httpsOptions ? true : false,
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000
-        });
-        
-        res.json({
-            success: true,
-            message: 'Token erfolgreich erneuert',
-            token: newToken
-        });
-        
-    } catch (error) {
-        console.error('Token refresh error:', error);
-        res.status(500).json({ 
-            error: 'Interner Serverfehler',
-            success: false 
         });
     }
 });

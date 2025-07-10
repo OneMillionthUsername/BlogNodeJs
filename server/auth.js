@@ -218,29 +218,6 @@ export function requireAdmin(req, res, next) {
     next();
 }
 
-// Token-Refresh (für automatische Verlängerung)
-export function refreshToken(token) {
-    const decoded = verifyToken(token);
-    if (!decoded) {
-        return null;
-    }
-    
-    // Prüfe ob Token bald abläuft (weniger als 1 Stunde)
-    const now = Math.floor(Date.now() / 1000);
-    const timeToExpiry = decoded.exp - now;
-    
-    if (timeToExpiry < 3600) { // 1 Stunde
-        // Generiere neuen Token mit selben Daten
-        return generateToken({
-            id: decoded.id,
-            username: decoded.username,
-            role: decoded.role
-        });
-    }
-    
-    return token; // Token ist noch gültig
-}
-
 // JWT-Konfiguration für Debugging
 export function getJWTConfig() {
     return {
