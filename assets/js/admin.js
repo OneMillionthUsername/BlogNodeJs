@@ -57,7 +57,7 @@ async function adminLogin(reloadPage = true) {
         return false;
     }
     
-    console.log('🔑 Versuche Login mit:', username); // Debug-Ausgabe
+    console.log('Attempting login with:', username); // Debug output
     
     try {
         const result = await makeApiRequest('/auth/login', {
@@ -71,7 +71,9 @@ async function adminLogin(reloadPage = true) {
             })
         });
         
-        console.log('📥 Login-Antwort:', result); // Debug-Ausgabe
+        console.log('Login response:', result); // Debug output
+        console.log('Response status:', result.status); // Status code
+        console.log('Response data:', result.data); // Response body
         
         if (result.success && result.data && result.data.success) {
             isAdminLoggedIn = true;
@@ -86,13 +88,13 @@ async function adminLogin(reloadPage = true) {
             }
             return true;
         } else {
-            const errorMsg = result.data ? result.data.error : 'Login fehlgeschlagen';
-            console.error('❌ Login fehlgeschlagen:', errorMsg); // Debug-Ausgabe
-            alert('Login fehlgeschlagen: ' + errorMsg);
+            const errorMsg = result.data ? result.data.error : 'Login failed';
+            console.error('Login failed:', errorMsg); // Debug output
+            alert('Login failed: ' + errorMsg);
             return false;
         }
     } catch (error) {
-        console.error('❌ Login-Fehler:', error);
+        console.error('Login error:', error);
         alert('Login fehlgeschlagen: Netzwerkfehler');
         return false;
     }
