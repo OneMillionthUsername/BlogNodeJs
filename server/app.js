@@ -463,7 +463,7 @@ app.post('/auth/verify', (req, res) => {
         if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
             tokenSource = 'Authorization header';
         } else if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
-            tokenSource = 'authToken cookie';
+            tokenSource = 'auth_token cookie';
         } else if (req.body && req.body.token) {
             tokenSource = 'request body';
         }

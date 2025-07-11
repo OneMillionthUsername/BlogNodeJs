@@ -15,6 +15,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Debug und Test Scripts (enthalten möglicherweise sensible Daten)
+check-password.sh
+debug-login.js
+test-auth-complete.js
+
 # Logs
 logs
 *.log

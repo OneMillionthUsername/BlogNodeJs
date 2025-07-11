@@ -80,8 +80,8 @@ export function extractTokenFromRequest(req) {
     }
     
     // Prüfe Cookies (fallback)
-    if (req.cookies && req.cookies.authToken) {
-        return req.cookies.authToken;
+    if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
+        return req.cookies[AUTH_COOKIE_NAME];
     }
     
     return null;
