@@ -3,67 +3,30 @@
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// JWT-Secret Validation
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL ERROR: JWT_SECRET environment variable is required!');
+    console.error('Please add JWT_SECRET to your .env file');
+    console.error('Example: JWT_SECRET=your_64_character_secret_key_here');
+    process.exit(1);
+}
+
+if (process.env.JWT_SECRET.length < 32) {
+    console.error('FATAL ERROR: JWT_SECRET must be at least 32 characters long');
+    console.error('Current length:', process.env.JWT_SECRET.length);
+    console.error('Generate a secure key with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+    process.exit(1);
+}
 
 // JWT-Konfiguration
 const JWT_CONFIG = {
-    SECRET_KEY: getJWTSecret(),
+    SECRET_KEY: process.env.JWT_SECRET,
     EXPIRES_IN: '24h', // Token-Lebensdauer
     ALGORITHM: 'HS256',
     ISSUER: 'blog-app',
     AUDIENCE: 'blog-users'
 };
-
-// JWT-Secret sicher laden (Environment-Variable oder generieren)
-function getJWTSecret() {
-    // 1. Priorität: Environment-Variable (Production)
-    if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) {
-        console.log('JWT-Secret aus Environment-Variable geladen');
-        return process.env.JWT_SECRET;
-    }
-    
-    // 2. Fallback: Bestehende Datei lesen (Development)
-    const configPath = join(__dirname, '..', 'config', 'jwt-secret.txt');
-    try {
-        if (existsSync(configPath)) {
-            const existingKey = readFileSync(configPath, 'utf8').trim();
-            if (existingKey.length >= 32) {
-                console.log('JWT-Secret aus Datei geladen (Development)');
-                return existingKey;
-            }
-        }
-    } catch (error) {
-        console.warn('Konnte JWT-Secret-Datei nicht lesen');
-    }
-    
-    // 3. Letzter Fallback: Neuen Secret generieren und warnen
-    console.warn('WARNUNG: Kein JWT-Secret gefunden! Generiere temporären Secret...');
-    console.warn('Setzen Sie JWT_SECRET in der .env für Production!');
-    
-    const tempSecret = crypto.randomBytes(64).toString('hex');
-    
-    // Nur in Development-Modus in Datei speichern
-    if (process.env.NODE_ENV !== 'production') {
-        try {
-            const configDir = join(__dirname, '..', 'config');
-            if (!existsSync(configDir)) {
-                mkdirSync(configDir, { recursive: true });
-            }
-            writeFileSync(configPath, tempSecret, 'utf8');
-            console.log('Temporärer JWT-Secret für Development gespeichert');
-        } catch (error) {
-            console.warn('Konnte temporären JWT-Secret nicht speichern');
-        }
-    }
-    
-    return tempSecret;
-}
 
 // JWT-Token generieren
 export function generateToken(user) {

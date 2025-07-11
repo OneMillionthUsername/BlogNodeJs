@@ -183,8 +183,7 @@ ssl/openssl.cnf
 # ZUSÄTZLICHE SICHERHEITS-AUSSCHLÜSSE
 # ===========================================
 
-# JWT-Secrets und Konfigurationsdateien
-config/jwt-secret.txt
+# JWT-Secrets und Konfigurationsdateien (nur noch Environment-Variablen verwenden)
 config/*.secret
 config/*.key
 *.jwt
