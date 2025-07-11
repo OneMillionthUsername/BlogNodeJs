@@ -160,9 +160,11 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(json({ limit: '50mb' })); // JSON-Body parsen mit erhöhtem Limit für Bilder
-app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL-encoded Bodies mit erhöhtem Limit
-app.use(cookieParser()); // Cookie-Parser für JWT-Tokens
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '2mb';
+const URLENCODED_BODY_LIMIT = process.env.URLENCODED_BODY_LIMIT || '2mb';
+app.use(express.json({ limit: JSON_BODY_LIMIT })); // JSON Bodies mit konfigurierbarem Limit
+app.use(express.urlencoded({ limit: URLENCODED_BODY_LIMIT, extended: true })); // URL-encoded Bodies mit konfigurierbarem Limit
+app.use(cookieParser()); // Cookie-Parser für Cookies, inkl. JWT im 'authToken'-Cookie
 
 // Statische Dateien mit korrekten MIME-Types
 app.use(express.static(publicDirectoryPath, {
