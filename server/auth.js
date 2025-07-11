@@ -34,7 +34,6 @@ export function generateToken(user) {
         id: user.id,
         username: user.username,
         role: user.role,
-        iat: Math.floor(Date.now() / 1000),
         iss: JWT_CONFIG.ISSUER,
         aud: JWT_CONFIG.AUDIENCE
     };
@@ -54,12 +53,22 @@ export function verifyToken(token) {
             audience: JWT_CONFIG.AUDIENCE
         });
     } catch (error) {
-        console.error('JWT-Verifikation fehlgeschlagen:', error.message);
+        if (process.env.NODE_ENV === 'production') {
+            console.error('JWT-Verifikation fehlgeschlagen');
+        } else {
+            console.error('JWT-Verifikation fehlgeschlagen:', error.message);
+        }
         return null;
     }
 }
 
 // Token aus Request extrahieren
+/**
+ * Extracts the JWT token from an Express request object.
+ * Checks the Authorization header and cookies for a token.
+ * @param {import('express').Request} req - The Express request object.
+ * @returns {string|null} The extracted JWT token, or null if not found.
+ */
 export function extractTokenFromRequest(req) {
     // Prüfe Authorization Header
     const authHeader = req.headers.authorization;
@@ -74,6 +83,7 @@ export function extractTokenFromRequest(req) {
     
     return null;
 }
+
 
 // Admin-Login validieren (Datenbank-basiert)
 export async function validateAdminLogin(username, password) {
