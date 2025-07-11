@@ -33,6 +33,9 @@ const JWT_CONFIG = {
 
 // JWT-Token generieren
 export function generateToken(user) {
+    console.log('🔑 === TOKEN GENERATION DEBUG ===');
+    console.log('🔑 Input user object:', user);
+    
     const payload = {
         id: user.id,
         username: user.username,
@@ -41,26 +44,62 @@ export function generateToken(user) {
         aud: JWT_CONFIG.AUDIENCE
     };
     
-    return jwt.sign(payload, JWT_CONFIG.SECRET_KEY, {
+    console.log('🔑 JWT Payload:', payload);
+    console.log('🔑 JWT Config:');
+    console.log('   SECRET_KEY length:', JWT_CONFIG.SECRET_KEY?.length);
+    console.log('   EXPIRES_IN:', JWT_CONFIG.EXPIRES_IN);
+    console.log('   ALGORITHM:', JWT_CONFIG.ALGORITHM);
+    console.log('   ISSUER:', JWT_CONFIG.ISSUER);
+    console.log('   AUDIENCE:', JWT_CONFIG.AUDIENCE);
+    
+    const token = jwt.sign(payload, JWT_CONFIG.SECRET_KEY, {
         expiresIn: JWT_CONFIG.EXPIRES_IN,
         algorithm: JWT_CONFIG.ALGORITHM
     });
+    
+    console.log('🔑 Generated token length:', token.length);
+    console.log('🔑 Generated token (first 50 chars):', token.substring(0, 50) + '...');
+    console.log('🔑 Full generated token (DEBUG):', token);
+    console.log('🔑 === TOKEN GENERATION COMPLETE ===');
+    
+    return token;
 }
 
 // JWT-Token verifizieren
 export function verifyToken(token) {
+    console.log('🔓 === TOKEN VERIFICATION DEBUG ===');
+    console.log('🔓 Input token length:', token?.length || 0);
+    console.log('🔓 Input token (first 50 chars):', token ? token.substring(0, 50) + '...' : '[NO TOKEN]');
+    console.log('🔓 Full input token (DEBUG):', token);
+    
     try {
-        return jwt.verify(token, JWT_CONFIG.SECRET_KEY, {
+        console.log('🔓 Attempting JWT verification with config:');
+        console.log('   algorithms:', [JWT_CONFIG.ALGORITHM]);
+        console.log('   issuer:', JWT_CONFIG.ISSUER);
+        console.log('   audience:', JWT_CONFIG.AUDIENCE);
+        console.log('   secret length:', JWT_CONFIG.SECRET_KEY?.length);
+        
+        const decoded = jwt.verify(token, JWT_CONFIG.SECRET_KEY, {
             algorithms: [JWT_CONFIG.ALGORITHM],
             issuer: JWT_CONFIG.ISSUER,
             audience: JWT_CONFIG.AUDIENCE
         });
+        
+        console.log('✅ Token verification successful');
+        console.log('🔓 Decoded payload:', decoded);
+        console.log('🔓 === TOKEN VERIFICATION SUCCESS ===');
+        return decoded;
     } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-            console.error('JWT-Verifikation fehlgeschlagen');
-        } else {
-            console.error('JWT-Verifikation fehlgeschlagen:', error.message);
+        console.error('❌ JWT-Verifikation fehlgeschlagen');
+        console.error('   Error name:', error.name);
+        console.error('   Error message:', error.message);
+        console.error('   Error details:', error);
+        
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('   Full error stack:', error.stack);
         }
+        
+        console.log('🔓 === TOKEN VERIFICATION FAILED ===');
         return null;
     }
 }
@@ -73,77 +112,152 @@ export function verifyToken(token) {
  * @returns {string|null} The extracted JWT token, or null if not found.
  */
 export function extractTokenFromRequest(req) {
+    console.log('🔍 === TOKEN EXTRACTION DEBUG ===');
+    console.log('🔍 Request headers:', req.headers);
+    console.log('🔍 Request cookies:', req.cookies);
+    console.log('🔍 AUTH_COOKIE_NAME:', AUTH_COOKIE_NAME);
+    
     // Prüfe Authorization Header
     const authHeader = req.headers.authorization;
+    console.log('🔍 Authorization header:', authHeader);
+    
     if (authHeader && authHeader.startsWith('Bearer ')) {
-        return authHeader.substring(7);
+        const headerToken = authHeader.substring(7);
+        console.log('✅ Token found in Authorization header');
+        console.log('🔍 Header token length:', headerToken.length);
+        console.log('🔍 Header token (first 50):', headerToken.substring(0, 50) + '...');
+        console.log('🔍 === TOKEN EXTRACTION SUCCESS (HEADER) ===');
+        return headerToken;
     }
     
     // Prüfe Cookies (fallback)
+    console.log('🔍 Checking cookies for:', AUTH_COOKIE_NAME);
     if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
-        return req.cookies[AUTH_COOKIE_NAME];
+        const cookieToken = req.cookies[AUTH_COOKIE_NAME];
+        console.log('✅ Token found in cookie');
+        console.log('🔍 Cookie token length:', cookieToken.length);
+        console.log('🔍 Cookie token (first 50):', cookieToken.substring(0, 50) + '...');
+        console.log('🔍 === TOKEN EXTRACTION SUCCESS (COOKIE) ===');
+        return cookieToken;
     }
     
+    console.log('❌ No token found in headers or cookies');
+    console.log('🔍 Available cookie names:', req.cookies ? Object.keys(req.cookies) : 'none');
+    console.log('🔍 === TOKEN EXTRACTION FAILED ===');
     return null;
 }
 
 
 // Admin-Login validieren (Datenbank-basiert)
 export async function validateAdminLogin(username, password) {
-    console.log('Login attempt for username:', username);
+    console.log('=== ADMIN LOGIN DEBUG START ===');
+    console.log('🔍 Login attempt for username:', username);
+    console.log('🔍 Password provided:', password ? `[${password.length} chars]` : '[NONE]');
+    console.log('🔍 Raw password (DEBUG):', password);
     
     if (!username || !password) {
-        console.log('Missing username or password');
+        console.log('❌ Missing username or password');
+        console.log('   Username present:', !!username);
+        console.log('   Password present:', !!password);
         return null;
     }
     
     try {
+        console.log('🔗 Attempting to import DatabaseService...');
         // Importiere DatabaseService zur Laufzeit um zirkuläre Abhängigkeiten zu vermeiden
         const { DatabaseService } = await import('./database.js');
+        console.log('✅ DatabaseService imported successfully');
+        
+        console.log('🔍 Querying database for admin user...');
+        console.log('   SQL Query will be: SELECT * FROM admins WHERE username = ?');
+        console.log('   Parameter:', username);
         
         // Admin-Benutzer aus Datenbank laden
         const admin = await DatabaseService.getAdminByUsername(username);
+        console.log('📊 Database query result:', admin ? 'USER FOUND' : 'USER NOT FOUND');
+        
+        if (admin) {
+            console.log('👤 Admin user details:');
+            console.log('   ID:', admin.id);
+            console.log('   Username:', admin.username);
+            console.log('   Email:', admin.email);
+            console.log('   Role:', admin.role);
+            console.log('   Active:', admin.active);
+            console.log('   Login attempts:', admin.login_attempts);
+            console.log('   Locked until:', admin.locked_until);
+            console.log('   Password hash:', admin.password_hash ? `[${admin.password_hash.length} chars]` : '[NONE]');
+            console.log('   Full password hash (DEBUG):', admin.password_hash);
+        }
+        
         if (!admin) {
-            console.log('Admin user not found:', username);
+            console.log('❌ Admin user not found in database:', username);
+            console.log('💡 Available usernames check needed via SQL: SELECT username FROM admins');
             return null;
         }
         
         // Prüfe ob Account gesperrt ist
         if (!admin.active) {
-            console.log('Admin account is disabled:', username);
+            console.log('❌ Admin account is disabled:', username);
+            console.log('   Account active status:', admin.active);
             return null;
         }
         
         // Prüfe ob Account temporär gesperrt ist
         if (admin.locked_until && new Date() < new Date(admin.locked_until)) {
-            console.log('Admin account is temporarily locked:', username);
+            console.log('❌ Admin account is temporarily locked:', username);
+            console.log('   Current time:', new Date().toISOString());
+            console.log('   Locked until:', admin.locked_until);
             return null;
         }
         
+        console.log('🔐 Starting password comparison...');
+        console.log('   Input password:', password);
+        console.log('   Stored hash:', admin.password_hash);
+        console.log('   bcrypt.compare parameters ready');
+        
         // Passwort mit Hash vergleichen
         const isValidPassword = await bcrypt.compare(password, admin.password_hash);
+        console.log('🔐 Password comparison result:', isValidPassword ? 'MATCH' : 'NO MATCH');
         
         if (isValidPassword) {
-            // Login-Attempts zurücksetzen bei erfolgreichem Login
-            await DatabaseService.updateAdminLoginSuccess(admin.id);
+            console.log('✅ PASSWORD VALIDATED SUCCESSFULLY');
             
-            console.log('Admin login successful:', username);
-            return {
+            // Login-Attempts zurücksetzen bei erfolgreichem Login
+            console.log('📝 Updating login success in database...');
+            await DatabaseService.updateAdminLoginSuccess(admin.id);
+            console.log('✅ Database updated with successful login');
+            
+            const returnUser = {
                 id: admin.id,
                 username: admin.username,
                 role: admin.role,
                 email: admin.email,
                 full_name: admin.full_name
             };
-        } else {
-            // Fehlgeschlagene Login-Versuche erhöhen
-            await DatabaseService.updateAdminLoginFailure(admin.id);
             
-            console.log('Invalid password for admin:', username);
+            console.log('👤 Returning user object:', returnUser);
+            console.log('✅ Admin login successful:', username);
+            console.log('=== ADMIN LOGIN DEBUG SUCCESS ===');
+            return returnUser;
+        } else {
+            console.log('❌ PASSWORD VALIDATION FAILED');
+            
+            // Fehlgeschlagene Login-Versuche erhöhen
+            console.log('📝 Updating login failure in database...');
+            await DatabaseService.updateAdminLoginFailure(admin.id);
+            console.log('✅ Database updated with failed login attempt');
+            
+            console.log('❌ Invalid password for admin:', username);
+            console.log('=== ADMIN LOGIN DEBUG FAILED ===');
             return null;
         }
     } catch (error) {
-        console.error('Error during admin login validation:', error);
+        console.error('💥 ERROR during admin login validation:');
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+        console.error('   Error code:', error.code);
+        console.error('   Error name:', error.name);
+        console.log('=== ADMIN LOGIN DEBUG ERROR ===');
         return null;
     }
 }
