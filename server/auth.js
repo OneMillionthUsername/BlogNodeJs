@@ -4,6 +4,9 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
+// Cookie-Konfiguration
+export const AUTH_COOKIE_NAME = 'auth_token';
+
 // JWT-Secret Validation
 if (!process.env.JWT_SECRET) {
     console.error('FATAL ERROR: JWT_SECRET environment variable is required!');
@@ -198,7 +201,8 @@ export function getJWTConfig() {
         expiresIn: JWT_CONFIG.EXPIRES_IN,
         issuer: JWT_CONFIG.ISSUER,
         audience: JWT_CONFIG.AUDIENCE,
-        hasSecret: !!JWT_CONFIG.SECRET_KEY
+        secretPresent: !!JWT_CONFIG.SECRET_KEY,
+        secretLength: JWT_CONFIG.SECRET_KEY ? JWT_CONFIG.SECRET_KEY.length : 0
     };
 }
 

@@ -7,6 +7,10 @@ import http from 'http';
 import { readFileSync } from 'fs';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import { unlink as unlinkAsync } from 'fs/promises';
+
+// Define cookie name as a constant for easier maintenance
+const AUTH_COOKIE_NAME = 'authToken';
 
 // Environment-Variablen laden
 dotenv.config();
@@ -192,11 +196,25 @@ app.use(express.static(publicDirectoryPath, {
 // ÖFFENTLICHE ENDPOINTS
 // ===========================================
 
+// Health Check Endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: IS_PRODUCTION ? 'production' : 'development',
+        version: process.env.npm_package_version || '1.0.0'
+    });
+});
+
 app.get('/', (req, res) => {
   res.sendFile(join(publicDirectoryPath, 'index.html'));
 });
 
 // GET /blogpost/:filename - Einzelnen Blogpost abrufen (Datenbank)
+// Parameter: filename (string) - Der Dateiname des Blogposts, erwartet wird ein gültiger Slug oder Dateiname ohne Pfadangaben.
+// Beispiel: /blogpost/my-first-post.md
+// Constraints: Keine Schrägstriche, keine Pfadangaben, nur gültige Dateinamen/Slugs.
 app.get('/blogpost/:filename', async (req, res) => {
   const fileName = req.params.filename;
 
@@ -208,7 +226,7 @@ app.get('/blogpost/:filename', async (req, res) => {
     }
 
     // View tracken in Datenbank
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const userAgent = req.get('User-Agent');
     const referer = req.get('Referer');
     
@@ -217,7 +235,6 @@ app.get('/blogpost/:filename', async (req, res) => {
       console.error('Fehler beim Tracking:', err);
     });
 
-    res.setHeader("Content-Type", "application/json");
     res.json(post);
   } catch (error) {
     console.error('Fehler beim Laden des Posts:', error);
@@ -226,10 +243,27 @@ app.get('/blogpost/:filename', async (req, res) => {
 });
 
 // GET /blogposts - Alle Blogposts auflisten (Datenbank)
+// Query-Parameter:
+//   - limit (optional): Anzahl der zurückgegebenen Blogposts (Standard: alle)
+//   - offset (optional): Offset für Pagination (Standard: 0)
+// Response:
+//   - Array von Blogpost-Objekten:
+//     [
+//       {
+//         id: number,
+//         title: string,
+//         content: string,
+//         tags: array,
+//         author: string,
+//         created_at: string,
+//         views: number
+//       },
+//       ...
+//     ]
 app.get('/blogposts', async (req, res) => {
   try {
     const posts = await DatabaseService.getAllPosts();
-    res.json(posts);
+    res.json(posts || []);
   } catch (error) {
     console.error('Fehler beim Laden der Posts:', error);
     res.status(500).json({ error: 'Fehler beim Laden der Blogposts' });
@@ -237,9 +271,13 @@ app.get('/blogposts', async (req, res) => {
 });
 
 // GET /most-read - Meistgelesene Blogposts (Datenbank)
+// Query-Parameter:
+//   - limit (optional): Anzahl der zurückgegebenen Blogposts (Standard: 10)
+    
+//   - Array von Blogpost-Objekten
 app.get('/most-read', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit, 10);
     const posts = await DatabaseService.getMostReadPosts(limit);
     res.json(posts);
   } catch (error) {
@@ -254,9 +292,9 @@ app.get('/comments/:postFilename', async (req, res) => {
 
   try {
     const comments = await DatabaseService.getCommentsByPost(postFilename);
-    res.json(comments);
+    res.json(comments || []);
   } catch (error) {
-    console.error('Fehler beim Laden der Kommentare:', error);
+    console.error('Fehler beim Laden der Kommentare für', postFilename, ':', error);
     res.status(500).json({ error: 'Fehler beim Laden der Kommentare' });
   }
 });
@@ -264,18 +302,25 @@ app.get('/comments/:postFilename', async (req, res) => {
 // GET /assets/uploads/:filename - Bilder ausliefern
 app.get('/assets/uploads/:filename', (req, res) => {
   const filename = req.params.filename;
-  const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
-  
+  const uploadsDir = join(__dirname, '..', 'assets', 'uploads');
+  const imagePath = join(uploadsDir, filename);
+
   // Sicherheitscheck: Nur erlaubte Dateierweiterungen
   const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
   const hasValidExtension = allowedExtensions.some(ext => 
     filename.toLowerCase().endsWith(ext)
   );
-  
+
   if (!hasValidExtension) {
-    return res.status(400).json({ error: 'Nicht unterstütztes Bildformat' });
+    return res.status(400).json({ error: 'Ungültiger Dateityp' });
   }
-  
+
+  // Pfadvalidierung: Stelle sicher, dass imagePath im uploadsDir liegt
+  const resolvedImagePath = join(uploadsDir, filename);
+  if (!resolvedImagePath.startsWith(uploadsDir)) {
+    return res.status(400).json({ error: 'Ungültiger Dateipfad' });
+  }
+
   // Content-Type basierend auf Dateierweiterung setzen
   const extension = filename.toLowerCase().split('.').pop();
   const contentTypes = {
@@ -285,12 +330,16 @@ app.get('/assets/uploads/:filename', (req, res) => {
     'gif': 'image/gif',
     'webp': 'image/webp'
   };
-  
-  res.setHeader('Content-Type', contentTypes[extension] || 'image/jpeg');
+
+  if (!contentTypes[extension]) {
+    return res.status(400).json({ error: 'Nicht unterstütztes Bildformat' });
+  }
+
+  res.setHeader('Content-Type', contentTypes[extension]);
   res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 Jahr Cache
-  
+
   // Datei ausliefern
-  res.sendFile(imagePath, (err) => {
+  res.sendFile(resolvedImagePath, (err) => {
     if (err) {
       console.error('Fehler beim Ausliefern des Bildes:', err);
       res.status(404).json({ error: 'Bild nicht gefunden' });
@@ -303,69 +352,124 @@ app.get('/assets/uploads/:filename', (req, res) => {
 // ===========================================
 
 // POST /auth/login - Admin-Anmeldung
-app.post('/auth/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        
-        // Input-Validierung
-        if (!username || !password) {
-            return res.status(400).json({ 
-                error: 'Benutzername und Passwort erforderlich',
-                success: false 
-            });
+// Response:
+//   - On success:
+//       {
+//         success: true,
+//         message: 'Anmeldung erfolgreich',
+//         user: {
+//           id: number,
+//           username: string,
+//           role: string
+//         }
+//       }
+//   - On error:
+//       {
+//         error: string,
+//         success: false
+//       }
+
+// Helper for input validation
+function validateLoginInput(body) {
+    const { username, password } = body;
+    if (!username || !password) {
+        return { valid: false, error: 'Benutzername und Passwort erforderlich' };
+    }
+    return { valid: true, username, password };
+}
+
+// Utility: Sanitize filename for uploads
+function sanitizeFilename(name) {
+    return name
+        .replace(/[^\w\.-]/g, '_') // Ersetze ungültige Zeichen durch Unterstriche
+        .replace(/_{2,}/g, '_') // Mehrfache Unterstriche reduzieren
+        .toLowerCase();
+}
+
+// Helper for authentication
+async function authenticateAdmin(username, password) {
+    const user = await validateAdminLogin(username, password);
+    if (!user) {
+        // Sicherheitsdelay bei fehlgeschlagener Anmeldung
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return null;
+    }
+    return user;
+}
+
+// Helper for response
+function sendLoginResponse(res, user, token) {
+    res.cookie(AUTH_COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: Boolean(IS_PRODUCTION || httpsOptions),
+        sameSite: 'strict',
+    });
+    console.log(`[AUTH AUDIT] Successful admin authentication for user: ID=${user.id}, username=${user.username}`);
+    res.json({
+        success: true,
+        message: 'Anmeldung erfolgreich',
+        user: {
+            id: user.id,
+            username: user.username,
+            role: user.role
         }
-        
-        // Admin-Anmeldedaten validieren
-        const user = await validateAdminLogin(username, password);
-        
+    });
+}
+
+app.post('/auth/login', async (req, res) => {
+    // Input validation
+    const input = validateLoginInput(req.body);
+    if (!input.valid) {
+        return res.status(400).json({ 
+            error: input.error,
+            success: false 
+        });
+    }
+
+    try {
+        // Authentication
+        const user = await authenticateAdmin(input.username, input.password);
         if (!user) {
-            // Sicherheitsdelay bei fehlgeschlagener Anmeldung
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
             return res.status(401).json({ 
                 error: 'Ungültige Anmeldedaten',
                 success: false 
             });
         }
-        
-        // JWT-Token generieren
-        const token = generateToken(user);
-        
-        // Token als httpOnly Cookie setzen (sicherer als localStorage)
-        res.cookie('authToken', token, {
-            httpOnly: true,
-            secure: IS_PRODUCTION || httpsOptions ? true : false, // HTTPS in Production
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 24 Stunden
-        });
-        
-        console.log(`Admin login successful: ${user.username}`);
-        
-        res.json({
-            success: true,
-            message: 'Anmeldung erfolgreich',
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role
-            }
-        });
-        
+
+        // Token generation
+        const { id, username, role } = user;
+        const token = generateToken({ id, username, role });
+
+        // Response
+        sendLoginResponse(res, user, token);
+
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ 
             error: 'Interner Serverfehler',
+            code: 'INTERNAL_SERVER_ERROR',
             success: false 
         });
     }
 });
 
 // POST /auth/verify - Token-Verifikation
+// Response:
+//   - On success:
 app.post('/auth/verify', (req, res) => {
     try {
         const token = extractTokenFromRequest(req);
+        let tokenSource = 'unknown';
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            tokenSource = 'Authorization header';
+        } else if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
+            tokenSource = 'authToken cookie';
+        } else if (req.body && req.body.token) {
+            tokenSource = 'request body';
+        }
         
         if (!token) {
+            console.warn(`[AUTH AUDIT] Token verification failed: No token found (source: ${tokenSource})`);
             return res.status(401).json({ 
                 success: false,
                 data: {
@@ -375,9 +479,22 @@ app.post('/auth/verify', (req, res) => {
             });
         }
         
-        const user = verifyToken(token);
+        let user;
+        try {
+            user = verifyToken(token);
+        } catch (err) {
+            console.error(`[AUTH AUDIT] Error during token verification (source: ${tokenSource}):`, err);
+            return res.status(403).json({ 
+                success: false,
+                data: {
+                    valid: false,
+                    error: 'Token ungültig oder abgelaufen' 
+                }
+            });
+        }
         
         if (!user) {
+            console.warn(`[AUTH AUDIT] Token verification failed: Invalid or expired token (source: ${tokenSource})`);
             return res.status(403).json({ 
                 success: false,
                 data: {
@@ -414,9 +531,9 @@ app.post('/auth/verify', (req, res) => {
 // POST /auth/logout - Abmeldung
 app.post('/auth/logout', (req, res) => {
     // Cookie löschen
-    res.clearCookie('authToken');
-    
-    // Hier können wir optional eine Blacklist implementieren
+    res.clearCookie(AUTH_COOKIE_NAME, {
+        httpOnly: true
+    });
     res.json({
         message: 'Logout erfolgreich',
         success: true
@@ -428,11 +545,26 @@ app.post('/auth/logout', (req, res) => {
 // ===========================================
 
 // POST /blogpost - Blogbeitrag speichern (JWT-geschützt, Datenbank)
+// Response:
+//   - On success:
+//       {
+//         message: 'Blogpost gespeichert',
+//         file: string,      // Dateiname des gespeicherten Blogposts
+//         postId: number     // ID des gespeicherten Blogposts
+//       }
+//   - On error:
+//       {
+//         error: string
+//       }
 app.post('/blogpost', authenticateToken, requireAdmin, async (req, res) => {
   const { title, content, tags } = req.body;
 
   if (!title || !content) {
     return res.status(400).json({ error: 'Titel und Inhalt sind erforderlich' });
+  }
+
+  if (!req.user || !req.user.username) {
+    return res.status(401).json({ error: 'Nicht authentifiziert oder Benutzername fehlt' });
   }
 
   try {
@@ -461,6 +593,17 @@ app.post('/blogpost', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // DELETE /blogpost/:filename - Blogpost löschen (JWT-geschützt, Datenbank)
+// Hinweis: Der Benutzername des löschenden Nutzers wird zur Datenbank für Audit-Zwecke übergeben.
+// Response:
+//   - On success:
+//       {
+//         message: 'Blogpost erfolgreich gelöscht',
+//         file: string      // Dateiname des gelöschten Blogposts
+//       }
+//   - On error:
+//       {
+//         error: string
+//       }
 app.delete('/blogpost/:filename', authenticateToken, requireAdmin, async (req, res) => {
   const fileName = req.params.filename;
 
@@ -496,14 +639,15 @@ app.post('/comments/:postFilename', async (req, res) => {
 
   try {
     const result = await DatabaseService.addComment(postFilename, {
-      username,
+      username: username || 'Anonym',
       text: text.trim(),
-      ipAddress: req.ip || req.connection.remoteAddress
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress
     });
 
     console.log(`New comment for ${postFilename} by ${result.comment.username}`);
     res.status(201).json({ 
       message: 'Kommentar erfolgreich hinzugefügt',
+      commentId: result.commentId,
       comment: result.comment
     });
     
@@ -516,18 +660,24 @@ app.post('/comments/:postFilename', async (req, res) => {
 // DELETE /comments/:postFilename/:commentId - Kommentar löschen (JWT-geschützt, Datenbank)
 app.delete('/comments/:postFilename/:commentId', authenticateToken, requireAdmin, async (req, res) => {
   const { postFilename, commentId } = req.params;
-  
+  const numericCommentId = Number(commentId);
+
+  // Validate commentId is a number
+  if (isNaN(numericCommentId)) {
+    return res.status(400).json({ error: 'Ungültige Kommentar-ID' });
+  }
+
   try {
-    const deleted = await DatabaseService.deleteComment(commentId, postFilename);
+    const deleted = await DatabaseService.deleteComment(numericCommentId, postFilename);
     
     if (!deleted) {
+      console.log(`Comment deletion attempted by ${req.user.username}: ${numericCommentId} in ${postFilename} - Result: FAILURE`);
       return res.status(404).json({ error: 'Kommentar nicht gefunden' });
     }
 
-    console.log(`Comment deleted by ${req.user.username}: ${commentId} in ${postFilename}`);
     res.json({ 
       message: 'Kommentar erfolgreich gelöscht',
-      commentId: commentId
+      commentId
     });
     
   } catch (error) {
@@ -536,7 +686,6 @@ app.delete('/comments/:postFilename/:commentId', authenticateToken, requireAdmin
   }
 });
 
-// POST /upload/image - Bild-Upload (JWT-geschützt, mit Datenbank-Tracking)
 app.post('/upload/image', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { image, filename } = req.body;
@@ -569,50 +718,50 @@ app.post('/upload/image', authenticateToken, requireAdmin, async (req, res) => {
     
     // Upload-Ordner erstellen falls nötig
     const uploadDir = join(__dirname, '..', 'assets', 'uploads');
-    mkdir(uploadDir, { recursive: true }, async (mkdirErr) => {
-      if (mkdirErr) {
-        console.error('Fehler beim Erstellen des Upload-Ordners:', mkdirErr);
-        return res.status(500).json({ error: 'Fehler beim Erstellen des Upload-Ordners' });
-      }
+    const { mkdir: mkdirAsync, writeFile: writeFileAsync, stat: statAsync } = await import('fs/promises');
+    try {
+      await mkdirAsync(uploadDir, { recursive: true });
+    } catch (mkdirErr) {
+      console.error('Fehler beim Erstellen des Upload-Ordners:', mkdirErr);
+      return res.status(500).json({ error: 'Fehler beim Erstellen des Upload-Ordners' });
+    }
+    
+    // Bild-Datei schreiben
+    const imagePath = join(uploadDir, uniqueFilename);
+    try {
+      await writeFileAsync(imagePath, base64Data, 'base64');
+    } catch (writeErr) {
+      console.error('Fehler beim Speichern des Bildes:', writeErr);
+      return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+    }
+    
+    try {
+      // Dateisize ermitteln
+      const stats = await statAsync(imagePath);
       
-      // Bild-Datei schreiben
-      const imagePath = join(uploadDir, uniqueFilename);
-      writeFile(imagePath, base64Data, 'base64', async (writeErr) => {
-        if (writeErr) {
-          console.error('Fehler beim Speichern des Bildes:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
-        }
-        
-        try {
-          // Dateisize ermitteln
-          const { stat } = await import('fs/promises');
-          const stats = await stat(imagePath);
-          
-          // Media-Eintrag in Datenbank erstellen
-          await DatabaseService.addMedia({
-            filename: uniqueFilename,
-            original_name: filename,
-            file_size: stats.size,
-            mime_type: 'image/' + (sanitizedFilename.split('.').pop() || 'jpeg'),
-            uploaded_by: req.user.username,
-            upload_path: `/assets/uploads/${uniqueFilename}`
-          });
-          
-        } catch (dbError) {
-          console.error('Fehler beim Tracking des Uploads:', dbError);
-          // Nicht kritisch, Upload war erfolgreich
-        }
-        
-        const imageUrl = `/assets/uploads/${uniqueFilename}`;
-        console.log(`Image uploaded by ${req.user.username}: ${uniqueFilename}`);
-        
-        res.json({
-          message: 'Bild erfolgreich hochgeladen',
-          filename: uniqueFilename,
-          url: imageUrl,
-          location: imageUrl // TinyMCE erwartet 'location' für die URL
-        });
+      // Media-Eintrag in Datenbank erstellen
+      await DatabaseService.addMedia({
+        filename: uniqueFilename,
+        original_name: filename,
+        file_size: stats.size,
+        mime_type: 'image/' + (sanitizedFilename.split('.').pop() || 'jpeg'),
+        uploaded_by: req.user.username,
+        upload_path: `/assets/uploads/${uniqueFilename}`
       });
+      
+    } catch (dbError) {
+      console.error('Fehler beim Tracking des Uploads:', dbError);
+      // Nicht kritisch, Upload war erfolgreich
+    }
+    
+    const imageUrl = `/assets/uploads/${uniqueFilename}`;
+    console.log(`Image uploaded by ${req.user.username}: ${uniqueFilename}`);
+    
+    res.json({
+      message: 'Bild erfolgreich hochgeladen',
+      filename: uniqueFilename,
+      url: imageUrl,
+      location: imageUrl // TinyMCE erwartet 'location' für die URL
     });
     
   } catch (error) {
@@ -623,104 +772,36 @@ app.post('/upload/image', authenticateToken, requireAdmin, async (req, res) => {
 
 // DELETE /assets/uploads/:filename - Bild löschen (JWT-geschützt, mit Datenbank-Update)
 app.delete('/assets/uploads/:filename', authenticateToken, requireAdmin, async (req, res) => {
-  const filename = req.params.filename;
-  const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
-  
-  try {
-    // Aus Datenbank entfernen
-    await DatabaseService.deleteMedia(filename);
+    const filename = req.params.filename;
+    const imagePath = join(__dirname, '..', 'assets', 'uploads', filename);
     
-    // Datei vom Dateisystem löschen
-    unlink(imagePath, (err) => {
-      if (err) {
-        if (err.code === 'ENOENT') {
-          return res.status(404).json({ error: 'Bild nicht gefunden' });
-        }
-        console.error('Fehler beim Löschen des Bildes:', err);
-        return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
-      }
-      
-      console.log(`Image deleted by ${req.user.username}: ${filename}`);
-      res.json({ message: 'Bild erfolgreich gelöscht', filename: filename });
-    });
-    
-  } catch (error) {
-    console.error('Fehler beim Löschen des Media-Eintrags:', error);
-    // Trotzdem versuchen, die Datei zu löschen
-    unlink(imagePath, (err) => {
-      if (err && err.code !== 'ENOENT') {
-        return res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
-      }
-      res.json({ message: 'Bild gelöscht (Datenbank-Fehler)', filename: filename });
-    });
-  }
-});
-
-// POST /upload/simple - Einfacher Bild-Upload ohne Komprimierung (JWT-geschützt)
-app.post('/upload/simple', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    // Für FormData-Upload direkt aus req.body (hier sollte Multer verwendet werden, aber für Einfachheit...)
-    // Da TinyMCE meistens JSON sendet, verwenden wir den gleichen Ansatz wie bei /upload/image
-    const { imageData, filename } = req.body;
-    
-    if (!imageData || !filename) {
-      return res.status(400).json({ error: 'Bilddaten und Dateiname sind erforderlich' });
-    }
-
-    // Base64-Header entfernen falls vorhanden
-    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-    
-    // Sicherheitsvalidierung: Prüfe ob es valide Base64-Daten sind
     try {
-      Buffer.from(base64Data, 'base64');
-    } catch (bufferError) {
-      return res.status(400).json({ error: 'Ungültiges Bildformat' });
-    }
-    
-    // Dateiname bereinigen
-    function sanitizeFilename(name) {
-      return name
-        .replace(/[^\w\.-]/g, '_') // Ersetze ungültige Zeichen durch Unterstriche
-        .replace(/_{2,}/g, '_') // Mehrfache Unterstriche reduzieren
-        .toLowerCase();
-    }
-    
-    const sanitizedFilename = sanitizeFilename(filename);
-    const timestamp = Date.now();
-    const uniqueFilename = `${timestamp}-${sanitizedFilename}`;
-    
-    // Upload-Ordner erstellen falls nötig
-    const uploadDir = join(__dirname, '..', 'assets', 'uploads');
-    mkdir(uploadDir, { recursive: true }, (mkdirErr) => {
-      if (mkdirErr) {
-        console.error('Fehler beim Erstellen des Upload-Ordners:', mkdirErr);
-        return res.status(500).json({ error: 'Fehler beim Erstellen des Upload-Ordners' });
-      }
-      
-      // Bild-Datei schreiben
-      const imagePath = join(uploadDir, uniqueFilename);
-      writeFile(imagePath, base64Data, 'base64', (writeErr) => {
-        if (writeErr) {
-          console.error('Fehler beim Speichern des Bildes:', writeErr);
-          return res.status(500).json({ error: 'Fehler beim Speichern des Bildes' });
+        // Parallel deletion für bessere Performance
+        const [dbResult] = await Promise.allSettled([
+            DatabaseService.deleteMedia(filename),
+            unlinkAsync(imagePath)
+        ]);
+        
+        // DB-Deletion muss erfolgreich sein
+        if (dbResult.status === 'rejected') {
+            throw new Error(`Database deletion failed: ${dbResult.reason}`);
         }
         
-        const imageUrl = `/assets/uploads/${uniqueFilename}`;
-        console.log(`Simple upload by ${req.user.username}: ${uniqueFilename}`);
-        
-        res.json({
-          message: 'Bild erfolgreich hochgeladen (einfach)',
-          filename: uniqueFilename,
-          url: imageUrl,
-          location: imageUrl // TinyMCE erwartet 'location' für die URL
+        console.log(`[AUDIT] Image deletion by user: ${req.user.username}, file: ${filename}, IP: ${req.ip}`);
+        res.json({ 
+            message: 'Bild erfolgreich gelöscht', 
+            filename: filename 
         });
-      });
-    });
-    
-  } catch (error) {
-    console.error('Fehler beim einfachen Upload:', error);
-    res.status(500).json({ error: 'Fehler beim einfachen Upload' });
-  }
+        
+    } catch (error) {
+        console.error('Deletion error:', error);
+        
+        if (error.code === 'ENOENT') {
+            return res.status(404).json({ error: 'Bild nicht gefunden' });
+        }
+        
+        res.status(500).json({ error: 'Fehler beim Löschen des Bildes' });
+    }
 });
 
 // ===========================================
@@ -739,15 +820,49 @@ console.log(`   Domain: ${process.env.DOMAIN || 'not set'}`);
 
 // HTTP Server (für Entwicklung und Redirects)
 const httpServer = http.createServer(app);
+
+// Server-Timeouts konfigurieren
+httpServer.setTimeout(30000); // 30 Sekunden
+httpServer.headersTimeout = 31000; // Etwas höher als setTimeout
+
 httpServer.listen(PORT, HOST, () => {
+    const protocol = IS_PRODUCTION || httpsOptions ? 'https' : 'http';
+    const domain = process.env.DOMAIN || 'localhost';
+    const displayPort = (protocol === 'http' && PORT === 80) || (protocol === 'https' && PORT === 443) ? '' : `:${PORT}`;
+    
     console.log(`HTTP Server running on ${HOST}:${PORT}`);
+    console.log(`Server erreichbar unter: ${protocol}://${domain}${displayPort}`);
+    
     if (IS_PLESK) {
         console.log('Plesk mode: SSL handled by Plesk');
-        console.log(`Publicly accessible at: http${IS_PRODUCTION ? 's' : ''}://${process.env.DOMAIN || 'localhost'}`);
     } else if (!httpsOptions) {
         console.log('HTTP only available - run "node ssl/generate-certs.js" for HTTPS');
     }
+}).on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} bereits in Verwendung!`);
+        console.error(`Tipp: Verwende einen anderen Port mit PORT=xxxx`);
+    } else {
+        console.error('Server-Fehler:', error);
+    }
+    process.exit(1);
 });
+
+// Graceful Shutdown Handler
+function gracefulShutdown(signal) {
+    console.log(`${signal} erhalten - starte Graceful Shutdown...`);
+    
+    httpServer.close((err) => {
+        if (err) {
+            console.error('Fehler beim Schließen des HTTP-Servers:', err);
+            process.exit(1);
+        }
+        
+        console.log('HTTP-Server geschlossen');
+        console.log('Server erfolgreich beendet');
+        process.exit(0);
+    });
+}
 
 // HTTPS Server nur in Development starten
 if (!IS_PLESK && httpsOptions) {
@@ -760,15 +875,26 @@ if (!IS_PLESK && httpsOptions) {
     });
     
     // Graceful shutdown für beide Server
-    process.on('SIGTERM', () => {
-        console.log('Shutting down servers...');
-        httpServer.close();
-        httpsServer.close();
+    ['SIGTERM', 'SIGINT', 'SIGUSR2'].forEach(signal => {
+        process.on(signal, () => {
+            console.log(`${signal} erhalten - starte Graceful Shutdown...`);
+            
+            httpServer.close((httpErr) => {
+                httpsServer.close((httpsErr) => {
+                    if (httpErr || httpsErr) {
+                        console.error('Fehler beim Schließen der Server:', httpErr || httpsErr);
+                        process.exit(1);
+                    }
+                    console.log('Beide Server geschlossen');
+                    console.log('Server erfolgreich beendet');
+                    process.exit(0);
+                });
+            });
+        });
     });
 } else {
     // Graceful shutdown nur für HTTP
-    process.on('SIGTERM', () => {
-        console.log('Shutting down HTTP server...');
-        httpServer.close();
+    ['SIGTERM', 'SIGINT', 'SIGUSR2'].forEach(signal => {
+        process.on(signal, () => gracefulShutdown(signal));
     });
 }

@@ -362,8 +362,8 @@ async function initializeTinyMCE() {
                 const sizeInMB = blob.size / 1024 / 1024;
                 
                 if (sizeInMB < 2) {
-                    // Kleine Bilder: verwende einfachen Upload
-                    console.log('📤 Verwende einfachen Upload für kleines Bild');
+                    // Kleine Bilder: verwende direkten Upload ohne Komprimierung
+                    console.log('📤 Verwende direkten Upload für kleines Bild');
                     return simpleImageUploadHandler(blobInfo, success, failure, progress);
                 } else {
                     // Große Bilder: verwende komprimierten Upload
@@ -898,7 +898,7 @@ async function compressAndUploadImage(blobInfo, success, failure, progress) {
     });
 }
 
-// Einfacher TinyMCE Upload-Handler (Fallback für problematische Uploads)
+// Vereinfachter TinyMCE Upload-Handler (verwendet /upload/image ohne Komprimierung)
 function simpleImageUploadHandler(blobInfo, success, failure, progress) {
     return new Promise((resolve, reject) => {
         try {
@@ -922,7 +922,7 @@ function simpleImageUploadHandler(blobInfo, success, failure, progress) {
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 
-                fetch('/upload/simple', {
+                fetch('/upload/image', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({
@@ -937,10 +937,10 @@ function simpleImageUploadHandler(blobInfo, success, failure, progress) {
                     return response.json();
                 })
                 .then(result => {
-                    console.log('✅ Einfacher Upload erfolgreich:', result);
+                    console.log('✅ Upload erfolgreich:', result);
                     
                     // Debug Response
-                    const imageUrl = debugUploadResponse(result, 'Einfacher Upload');
+                    const imageUrl = debugUploadResponse(result, 'Upload');
                     if (!imageUrl) {
                         const error = new Error('Server gab keine gültige URL zurück');
                         failure(error.message, { remove: true });
@@ -948,12 +948,12 @@ function simpleImageUploadHandler(blobInfo, success, failure, progress) {
                         return;
                     }
                     
-                    safeSuccess(success, imageUrl, 'Einfacher Upload');
+                    safeSuccess(success, imageUrl, 'Upload');
                     showNotification(`Bild "${result.filename}" hochgeladen! 📸`, 'success');
                     resolve(imageUrl); // Nur die URL zurückgeben, nicht das ganze Objekt
                 })
                 .catch(error => {
-                    console.error('❌ Einfacher Upload fehlgeschlagen:', error);
+                    console.error('❌ Upload fehlgeschlagen:', error);
                     failure(error.message, { remove: true });
                     showNotification(`❌ Upload-Fehler: ${error.message}`, 'error');
                     reject(error);
@@ -969,7 +969,7 @@ function simpleImageUploadHandler(blobInfo, success, failure, progress) {
             reader.readAsDataURL(blob);
             
         } catch (error) {
-            console.error('❌ Fehler beim einfachen Upload:', error);
+            console.error('❌ Fehler beim Upload:', error);
             failure(error.message, { remove: true });
             reject(error);
         }
