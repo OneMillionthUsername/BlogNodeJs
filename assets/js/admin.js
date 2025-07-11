@@ -1,25 +1,14 @@
-// Admin-System für den Blog - JWT-basierte Authentifizierung
+// Admin-System für den Blog - Cookie-basierte Authentifizierung
 // Alle admin-bezogenen Funktionen sind hier zentralisiert
 
 // Admin-Status Variable (muss vor allen Funktionen stehen)
 let isAdminLoggedIn = false;
 let currentUser = null;
 
-// API-Request mit Cookies (keine Client-Side Token-Logik)
-async function makeApiRequestWithAuth(url, options = {}) {
-    options.credentials = 'include'; // HTTP-only Cookies verwenden
-    options.headers = {
-        ...options.headers,
-        'Content-Type': 'application/json'
-    };
-    
-    return await makeApiRequest(url, options);
-}
-
 // Admin-Status über HTTP-only Cookie prüfen
 async function checkAdminStatus() {
     try {
-        const result = await makeApiRequestWithAuth('/auth/verify', {
+        const result = await makeApiRequest('/auth/verify', {
             method: 'POST'
         });
         
@@ -46,13 +35,14 @@ async function adminLogin(reloadPage = true) {
     const password = prompt('Admin-Passwort eingeben:');
     
     if (!password) {
+        console.log('Attempting login with:', username); // Debug output
         return false;
     }
     
-    console.log('Attempting login with:', username); // Debug output
+    //console.log('Attempting login with:', username); // Debug output
     
     try {
-        const result = await makeApiRequestWithAuth('/auth/login', {
+        const result = await makeApiRequest('/auth/login', {
             method: 'POST',
             body: JSON.stringify({
                 username: username,
@@ -91,7 +81,7 @@ async function adminLogin(reloadPage = true) {
 // Cookie-basiertes Admin Logout
 async function adminLogout() {
     try {
-        await makeApiRequestWithAuth('/auth/logout', {
+        await makeApiRequest('/auth/logout', {
             method: 'POST'
         });
     } catch (error) {
@@ -117,7 +107,7 @@ async function deletePost(filename) {
         return false;
     }
     
-    const result = await makeApiRequestWithAuth(`/blogpost/${filename}`, {
+    const result = await makeApiRequest(`/blogpost/${filename}`, {
         method: 'DELETE'
     });
     
@@ -210,7 +200,7 @@ function createAdminLoginButton() {
     const loginBtn = createElement('button', {
         id: 'admin-login-btn',
         cssText: ADMIN_STYLES.loginButton,
-        title: 'Admin Login (JWT)'
+        title: 'Admin Login'
     }, 'Admin');
     
     // Event-Listener hinzufügen
@@ -288,7 +278,7 @@ async function initializeAdminSystem() {
         createAdminToolbar();
         // Kommentare mit Admin-Funktionen neu laden falls sie bereits angezeigt werden
         if (typeof initializeCommentsSystem === 'function') {
-            setTimeout(initializeCommentsSystem, 100);
+            initializeCommentsSystem();
         }
     } else {
         console.log('Kein Admin eingeloggt - Login-Button anzeigen');
@@ -407,11 +397,6 @@ const ADMIN_MESSAGES = {
         failed: 'Falsches Passwort!',
         required: 'Sie müssen als Admin eingeloggt sein, um Posts zu löschen.'
     },
-    password: {
-        tooShort: 'Passwort muss mindestens 8 Zeichen lang sein!',
-        changed: 'Neues Admin-Passwort wurde gesetzt!\nDas Standard-Passwort funktioniert nicht mehr.',
-        setup: 'Sie verwenden noch das Standard-Passwort "admin123".\n\nMöchten Sie jetzt ein sicheres Admin-Passwort festlegen?\n\nEmpfohlen für die Sicherheit Ihres Blogs!'
-    },
     posts: {
         deleteConfirm: 'Sind Sie sicher, dass Sie diesen Blogpost löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
         deleteSuccess: 'Blogpost wurde erfolgreich gelöscht.',
@@ -421,6 +406,17 @@ const ADMIN_MESSAGES = {
 };
 
 // API-Utilities (zentralisiert)
+/**
+ * Makes an API request using fetch with default options for credentials and headers.
+ * @param {string} url - The endpoint URL to send the request to.
+ * @param {Object} [options={}] - Additional fetch options (method, headers, body, etc.).
+ * @returns {Promise<Object>} Resolves with an object containing:
+ *   - success {boolean}: true if response.ok, false otherwise.
+ *   - data {Object|string}: Parsed JSON response or error details.
+ *   - status {number}: HTTP status code or 0 on network error.
+ *   - error {string} [optional]: Error message if the request fails.
+ * Handles network errors and non-JSON responses gracefully.
+ */
 async function makeApiRequest(url, options = {}) {
     const defaultOptions = {
         credentials: 'include', // HTTP-only Cookies automatisch senden
@@ -429,7 +425,14 @@ async function makeApiRequest(url, options = {}) {
         }
     };
     
-    const mergedOptions = { ...defaultOptions, ...options };
+    const mergedOptions = {
+        ...defaultOptions,
+        ...options,
+        headers: {
+            ...defaultOptions.headers,
+            ...(options.headers || {})
+        }
+    };
     
     try {
         const response = await fetch(url, mergedOptions);
